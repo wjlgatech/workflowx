@@ -6,9 +6,9 @@ Context switches (app changes) within a session are tracked as friction signals.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timedelta
 from typing import Sequence
-from uuid import uuid4
 
 import structlog
 
@@ -96,8 +96,13 @@ def _build_session(events: list[RawEvent]) -> WorkflowSession:
 
     unique_apps = list(dict.fromkeys(apps))  # preserve order, dedupe
 
+    # Deterministic ID: same session window always gets the same ID.
+    # Prevents duplicates when capture is run multiple times on the same day.
+    session_key = f"{start.date().isoformat()}_{start.strftime('%H%M%S')}"
+    session_id = hashlib.md5(session_key.encode()).hexdigest()[:12]
+
     return WorkflowSession(
-        id=uuid4().hex[:12],
+        id=session_id,
         start_time=start,
         end_time=end,
         events=events,

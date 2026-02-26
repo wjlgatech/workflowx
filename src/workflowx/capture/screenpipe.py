@@ -175,13 +175,11 @@ def iter_events_from_screenpipe(
 ) -> Iterator[RawEvent]:
     """Stream events from Screenpipe in batches. Memory-efficient for large datasets."""
     adapter = ScreenpipeAdapter(db_path)
-    offset = 0
 
     while True:
         events = adapter.read_events(since=since, until=until, limit=batch_size)
         if not events:
             break
         yield from events
-        offset += len(events)
         if len(events) < batch_size:
             break

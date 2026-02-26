@@ -141,7 +141,7 @@ def capture(source: str, hours: int, save: bool) -> None:
         console.print("\n[red]No events captured.[/red] Is Screenpipe or ActivityWatch running?")
         return
 
-    # Sort and deduplicate
+    # Sort by timestamp
     all_events.sort(key=lambda e: e.timestamp)
     console.print(f"\n[bold]Total: {len(all_events)} events[/bold] from last {hours} hours")
 
