@@ -659,6 +659,72 @@ def dashboard(output: str) -> None:
     console.print(f"Open in your browser to see the ROI dashboard.")
 
 
+# ── DEMO ──────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.option("--days", default=14, help="Number of synthetic days to generate")
+@click.option("--output", "-o", type=click.Path(), default="workflowx-demo-dashboard.html")
+@click.option("--seed", default=42, help="Random seed for reproducibility")
+def demo(days: int, output: str, seed: int) -> None:
+    """Run full pipeline on synthetic data — proof of life in 10 seconds.
+
+    Generates realistic workflow data for a knowledge worker, runs the full
+    WorkflowX pipeline (capture → cluster → infer → detect patterns →
+    compute trends → diagnose → propose → measure ROI), and opens an
+    HTML dashboard showing everything.
+
+    No Screenpipe needed. No API key needed. Pure local demo.
+    """
+    from workflowx.demo import run_demo_pipeline
+    from workflowx.inference.patterns import format_patterns_report, format_trends_report
+    from workflowx.measurement import format_roi_report
+
+    console.print("\n[bold]WorkflowX Demo — Full Pipeline[/bold]\n")
+    console.print("Generating synthetic data for a knowledge worker's 2-week history...\n")
+
+    result = run_demo_pipeline(
+        output_dir=Path(output).parent,
+        num_days=days,
+        seed=seed,
+    )
+    # Rename dashboard to user's output path
+    generated = Path(result["dashboard_path"])
+    out_path = Path(output)
+    if generated != out_path:
+        out_path.write_text(generated.read_text())
+
+    # Show summary
+    console.print(f"  Sessions generated:     [bold]{result['sessions']}[/bold]")
+    console.print(f"  Patterns detected:      [bold]{result['patterns']}[/bold]")
+    console.print(f"  Weeks of trends:        [bold]{result['trends']}[/bold]")
+    console.print(f"  Replacement proposals:  [bold]{result['proposals']}[/bold]")
+    console.print(f"  Outcomes tracked:       [bold]{result['outcomes']}[/bold]")
+    console.print(f"  Friction trajectory:    [bold]{result['friction_trajectory']}[/bold]")
+    console.print()
+
+    # Top patterns
+    if result["top_patterns"]:
+        console.print("[bold]Top Recurring Patterns:[/bold]")
+        for p in result["top_patterns"]:
+            console.print(
+                f"  • {p['intent']} — {p['occurrences']}x, "
+                f"{p['total_min']:.0f} min invested"
+            )
+        console.print()
+
+    # ROI
+    roi = result["roi"]
+    weekly_savings_hrs = roi["total_weekly_savings_hours"]
+    weekly_usd = weekly_savings_hrs * 75.0
+    console.print(f"[bold green]Potential Weekly Savings: {roi['total_weekly_savings_minutes']:.0f} min ({weekly_savings_hrs:.1f} hrs) = ${weekly_usd:.0f}/week[/bold green]")
+    console.print(f"  Adopted: {roi['adopted']} | Rejected: {roi['rejected']} | Measuring: {roi['measuring']}")
+    console.print()
+
+    console.print(f"[bold]Dashboard: [link=file://{out_path.absolute()}]{out_path}[/link][/bold]")
+    console.print(f"Open in your browser to explore the full ROI dashboard.\n")
+
+
 # ── HELPERS ───────────────────────────────────────────────────
 
 
