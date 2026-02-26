@@ -54,7 +54,7 @@ async def propose_replacement(
         if hasattr(llm_client, "messages"):
             response = await llm_client.messages.create(
                 model=model,
-                max_tokens=800,
+                max_tokens=1500,
                 system=REPLACEMENT_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": context}],
             )
@@ -62,7 +62,7 @@ async def propose_replacement(
         else:
             response = await llm_client.chat.completions.create(
                 model=model,
-                max_tokens=800,
+                max_tokens=1500,
                 messages=[
                     {"role": "system", "content": REPLACEMENT_SYSTEM_PROMPT},
                     {"role": "user", "content": context},
