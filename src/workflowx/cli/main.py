@@ -773,6 +773,188 @@ def demo(days: int, output: str, seed: int) -> None:
     console.print(f"Open in your browser to explore the full ROI dashboard.\n")
 
 
+# ── DAEMON ────────────────────────────────────────────────────
+
+
+@cli.group()
+def daemon() -> None:
+    """Manage the WorkflowX background daemon.
+
+    The daemon runs the full pipeline automatically:\n
+      health:  every 5 min        — Screenpipe liveness\n
+      capture: 12:55 + 17:55 WD  — Roll up last 4h of events\n
+      analyze: 13:00 + 18:00 WD  — LLM inference; notifies on HIGH/CRITICAL\n
+      measure: 07:00 daily        — Adaptive ROI measurement\n
+      brief:   08:30 WD           — Morning summary notification
+    """
+    pass
+
+
+@daemon.command("start")
+def daemon_start() -> None:
+    """Install launchd agent and start the daemon (auto-restarts on login)."""
+    import subprocess
+    import sys
+
+    from workflowx.config import load_config
+    from workflowx.daemon import PLIST_PATH, install_launchd_plist, is_daemon_running
+
+    if sys.platform != "darwin":
+        console.print("[red]The daemon uses launchd — macOS only.[/red]")
+        console.print("On Linux/Windows: run 'workflowx daemon run' directly in a terminal.")
+        return
+
+    config = load_config()
+    pid_path = Path(config.data_dir) / "daemon.pid"
+
+    if is_daemon_running(pid_path):
+        console.print("[yellow]Daemon is already running.[/yellow] Use 'workflowx daemon status'.")
+        return
+
+    log_path = Path(config.data_dir) / "daemon.log"
+    plist_path = install_launchd_plist(log_path)
+    console.print(f"  Plist:  {plist_path}")
+    console.print(f"  Log:    {log_path}")
+
+    result = subprocess.run(
+        ["launchctl", "load", str(plist_path)],
+        capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        console.print("\n[green]Daemon started.[/green]")
+        console.print("  Runs at login, restarts automatically if it crashes.")
+        console.print("  Stop: workflowx daemon stop")
+    else:
+        console.print(f"[red]launchctl load failed:[/red] {result.stderr.strip() or result.stdout.strip()}")
+        console.print("You can still run the daemon manually: workflowx daemon run")
+
+
+@daemon.command("stop")
+def daemon_stop() -> None:
+    """Stop the daemon and remove the launchd agent."""
+    import subprocess
+    import sys
+
+    from workflowx.daemon import PLIST_PATH, uninstall_launchd_plist
+
+    if sys.platform != "darwin":
+        console.print("[yellow]No launchd agent on this platform.[/yellow]")
+        console.print("Kill the 'workflowx daemon run' process manually.")
+        return
+
+    result = subprocess.run(
+        ["launchctl", "unload", str(PLIST_PATH)],
+        capture_output=True, text=True,
+    )
+    removed = uninstall_launchd_plist()
+
+    if result.returncode == 0 or removed:
+        console.print("[green]Daemon stopped and plist removed.[/green]")
+    else:
+        msg = result.stderr.strip() or result.stdout.strip()
+        console.print(f"[yellow]Daemon was not running (or launchctl failed).[/yellow]")
+        if msg:
+            console.print(f"  {msg}")
+
+
+@daemon.command("status")
+def daemon_status() -> None:
+    """Show daemon status, last run times, and upcoming schedule."""
+    from workflowx.config import load_config
+    from workflowx.daemon import (
+        ANALYZE_TIMES,
+        BRIEF_TIMES,
+        CAPTURE_TIMES,
+        MEASURE_TIMES,
+        PLIST_PATH,
+        is_daemon_running,
+        next_fire_time,
+        read_state,
+    )
+
+    config = load_config()
+    pid_path   = Path(config.data_dir) / "daemon.pid"
+    state_path = Path(config.data_dir) / "daemon_state.json"
+
+    running = is_daemon_running(pid_path)
+    status_str = "[green]Running[/green]" if running else "[red]Stopped[/red]"
+    plist_str  = "installed" if PLIST_PATH.exists() else "[dim]not installed[/dim]"
+
+    console.print(f"\n[bold]WorkflowX Daemon[/bold]")
+    console.print(f"  Status:  {status_str}")
+    console.print(f"  Plist:   {plist_str}")
+    console.print(f"  Log:     {config.data_dir}/daemon.log")
+
+    state = read_state(state_path)
+    if state.jobs:
+        table = Table(title="Job History", show_header=True)
+        table.add_column("Job",      style="cyan")
+        table.add_column("Last Run", style="white")
+        table.add_column("Status",   style="white")
+        table.add_column("Next Run", style="white")
+
+        status_colors = {"ok": "green", "error": "red", "skipped": "yellow", "pending": "dim"}
+
+        for name, job in sorted(state.jobs.items()):
+            last  = job.last_run.strftime("%a %H:%M") if job.last_run else "—"
+            nxt   = job.next_run.strftime("%a %H:%M") if job.next_run else "—"
+            color = status_colors.get(job.last_status, "white")
+            err   = f" ({job.error_message[:40]})" if job.error_message else ""
+            table.add_row(
+                name,
+                last,
+                f"[{color}]{job.last_status}{err}[/{color}]",
+                nxt,
+            )
+        console.print()
+        console.print(table)
+
+    # Show upcoming schedule from now
+    now = datetime.now()
+    console.print(f"\n[bold]Upcoming Runs[/bold]  (as of {now.strftime('%H:%M')})")
+    upcoming = [
+        ("capture", next_fire_time(CAPTURE_TIMES, weekdays_only=True,  now=now)),
+        ("analyze", next_fire_time(ANALYZE_TIMES, weekdays_only=True,  now=now)),
+        ("measure", next_fire_time(MEASURE_TIMES, weekdays_only=False, now=now)),
+        ("brief",   next_fire_time(BRIEF_TIMES,   weekdays_only=True,  now=now)),
+    ]
+    for name, dt in sorted(upcoming, key=lambda x: x[1]):
+        delta = dt - now
+        h     = int(delta.total_seconds() // 3600)
+        m     = int((delta.total_seconds() % 3600) // 60)
+        console.print(f"  {name:10s}  {dt.strftime('%a %H:%M')}  (in {h}h {m:02d}m)")
+
+    if state.screenpipe_last_checked:
+        health_str = "[green]healthy[/green]" if state.screenpipe_healthy else "[red]unhealthy[/red]"
+        checked    = state.screenpipe_last_checked.strftime("%H:%M")
+        console.print(f"\n  Screenpipe: {health_str}  (last checked {checked})")
+
+    console.print()
+
+
+@daemon.command("run")
+def daemon_run() -> None:
+    """Run the daemon event loop directly (used by launchd — not for manual use).
+
+    For manual use, prefer 'workflowx daemon start' which installs the
+    launchd agent so the daemon survives reboots and restarts automatically.
+    """
+    from workflowx.config import load_config
+    from workflowx.daemon import run_daemon
+    from workflowx.storage import LocalStore
+
+    config     = load_config()
+    store      = LocalStore(config.data_dir)
+    data_dir   = Path(config.data_dir)
+    state_path = data_dir / "daemon_state.json"
+    pid_path   = data_dir / "daemon.pid"
+
+    try:
+        run_daemon(config, store, state_path, pid_path)
+    except KeyboardInterrupt:
+        console.print("\n[dim]Daemon stopped.[/dim]")
+
+
 # ── HELPERS ───────────────────────────────────────────────────
 
 
