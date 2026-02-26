@@ -98,11 +98,33 @@ workflowx status
 # Read today's events
 workflowx capture --hours 8
 
-# Analyze: cluster into sessions, show friction heatmap
+# Analyze: cluster into sessions, infer intent
 workflowx analyze --hours 8
 
-# Generate weekly report with replacement proposals (coming soon)
-workflowx report
+# Generate daily/weekly report
+workflowx report --period weekly
+
+# Detect recurring patterns across 30 days
+workflowx patterns --days 30
+
+# See friction trends over 4 weeks
+workflowx trends --weeks 4
+
+# Generate replacement proposals
+workflowx propose --top 3
+
+# Track a replacement and measure ROI
+workflowx adopt "competitive research" --before-minutes 50
+workflowx measure --days 7
+
+# Generate HTML ROI dashboard
+workflowx dashboard -o roi.html
+
+# Export data for external analysis
+workflowx export --data sessions --format csv --days 30
+
+# Start MCP server for Claude/Cursor
+workflowx mcp
 ```
 
 ### Example Output
@@ -130,15 +152,25 @@ High-friction sessions: 2 (110 min) ← these are your replacement candidates
 
 ```
 src/workflowx/
-├── models.py              # Pydantic domain models (the contract)
+├── models.py              # 11 Pydantic domain models (the contract)
+├── config.py              # Config from env vars / .env
+├── storage.py             # Local JSON storage (privacy-first, file-per-day)
+├── export.py              # JSON/CSV export for external analysis
+├── measurement.py         # Before/after ROI tracking
+├── dashboard.py           # Self-contained HTML ROI dashboard
+├── mcp_server.py          # MCP server for Claude/Cursor integration
 ├── capture/               # Data source adapters
-│   └── screenpipe.py      # Screenpipe SQLite reader
+│   ├── screenpipe.py      # Screenpipe SQLite reader
+│   └── activitywatch.py   # ActivityWatch REST API reader
 ├── inference/             # The intelligence layer ← OUR VALUE
 │   ├── clusterer.py       # Raw events → workflow sessions
-│   └── intent.py          # LLM-based intent inference
+│   ├── intent.py          # LLM-based intent inference
+│   ├── reporter.py        # Daily/weekly report generation
+│   └── patterns.py        # Cross-day pattern detection + friction trends
 ├── replacement/           # Workflow reimagination engine
+│   └── engine.py          # LLM-powered replacement proposals + Agenticom YAML
 ├── api/                   # FastAPI (dashboard, integrations)
-└── cli/                   # Click CLI (primary interface)
+└── cli/                   # Click CLI (12 commands)
 ```
 
 **Design principles:**
@@ -166,21 +198,24 @@ src/workflowx/
 - [x] Config from env vars (.env support)
 - [x] 24 tests passing, CI pipeline
 
-### Phase 2: Diagnosis (v0.2)
+### Phase 2: Diagnosis (v0.2) — *Complete*
 
-- [ ] Pattern detection (recurring high-friction workflows across days)
-- [ ] Weekly friction trends (is friction going up or down?)
-- [ ] Workflow diagnosis engine (cost attribution, automation scoring)
-- [ ] Pattern detection (recurring high-friction workflows)
-- [ ] Export to JSON / CSV for external analysis
-- [ ] MCP server (let Claude / Cursor query your workflow data)
+- [x] Pattern detection (recurring high-friction workflows across days)
+- [x] Weekly friction trends (is friction going up or down?)
+- [x] Workflow diagnosis engine (cost attribution, automation scoring)
+- [x] Export to JSON / CSV for external analysis
+- [x] MCP server (let Claude / Cursor query your workflow data)
+- [x] CLI: `patterns`, `trends`, `export`, `mcp`
+- [x] 63 tests passing
 
-### Phase 3: Replacement (v0.3)
+### Phase 3: Replacement (v0.3) — *Complete*
 
-- [ ] Replacement proposal engine
-- [ ] Agenticom workflow YAML generation
-- [ ] Before/after measurement (did the replacement actually save time?)
-- [ ] ROI dashboard (cumulative savings)
+- [x] Replacement proposal engine
+- [x] Agenticom workflow YAML generation
+- [x] Before/after measurement (did the replacement actually save time?)
+- [x] ROI dashboard (self-contained HTML with Chart.js)
+- [x] Adoption tracking with cumulative savings
+- [x] CLI: `adopt`, `measure`, `dashboard`
 - [ ] OpenClaw integration (trigger replacements from Slack/WhatsApp)
 
 ### Phase 4: Team Intelligence (v0.4)

@@ -7,12 +7,20 @@ Usage:
     workflowx validate        # Answer classification questions
     workflowx report          # Generate daily/weekly workflow report
     workflowx propose         # Generate replacement proposals for high-friction workflows
+    workflowx patterns        # Detect recurring workflow patterns (Phase 2)
+    workflowx trends          # Show weekly friction trends (Phase 2)
+    workflowx export          # Export data to JSON/CSV (Phase 2)
+    workflowx mcp             # Start MCP server (Phase 2)
+    workflowx adopt           # Mark a proposal as adopted (Phase 3)
+    workflowx measure         # Measure actual ROI of adopted replacements (Phase 3)
+    workflowx dashboard       # Generate HTML ROI dashboard (Phase 3)
 """
 
 from __future__ import annotations
 
 import asyncio
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import click
 from rich.console import Console
@@ -75,9 +83,13 @@ def status() -> None:
     store = LocalStore(config.data_dir)
     today_sessions = store.load_sessions(date.today())
     pending_qs = store.load_pending_questions()
+    patterns = store.load_patterns()
+    outcomes = store.load_outcomes()
     console.print(f"  Data Dir:        {config.data_dir}")
     console.print(f"  Today's Sessions: {len(today_sessions)}")
     console.print(f"  Pending Questions: {len(pending_qs)}")
+    console.print(f"  Patterns Tracked: {len(patterns)}")
+    console.print(f"  Outcomes Tracked: {len(outcomes)}")
 
     console.print(f"  Version:         {_get_version()}")
     console.print()
@@ -373,6 +385,278 @@ def propose(top: int) -> None:
             ))
 
     asyncio.run(_run_proposals())
+
+
+# ── PATTERNS (Phase 2) ───────────────────────────────────────
+
+
+@cli.command()
+@click.option("--days", default=30, help="Number of days to scan for patterns")
+@click.option("--min-occurrences", default=2, help="Minimum times a pattern must appear")
+def patterns(days: int, min_occurrences: int) -> None:
+    """Detect recurring workflow patterns across multiple days."""
+    from workflowx.config import load_config
+    from workflowx.inference.patterns import detect_patterns, format_patterns_report
+    from workflowx.storage import LocalStore
+
+    config = load_config()
+    store = LocalStore(config.data_dir)
+
+    # Load sessions across the date range
+    today = date.today()
+    all_sessions = []
+    for i in range(days):
+        d = today - timedelta(days=i)
+        all_sessions.extend(store.load_sessions(d))
+
+    if not all_sessions:
+        console.print(f"[yellow]No sessions in the last {days} days.[/yellow]")
+        return
+
+    console.print(f"Scanning {len(all_sessions)} sessions across {days} days...\n")
+
+    found = detect_patterns(all_sessions, min_occurrences=min_occurrences)
+    store.save_patterns(found)
+
+    text = format_patterns_report(found)
+    console.print(text)
+
+
+# ── TRENDS (Phase 2) ─────────────────────────────────────────
+
+
+@cli.command()
+@click.option("--weeks", default=4, help="Number of weeks to show")
+def trends(weeks: int) -> None:
+    """Show weekly friction trends."""
+    from workflowx.config import load_config
+    from workflowx.inference.patterns import compute_friction_trends, format_trends_report
+    from workflowx.storage import LocalStore
+
+    config = load_config()
+    store = LocalStore(config.data_dir)
+
+    # Load enough sessions
+    today = date.today()
+    all_sessions = []
+    for i in range(weeks * 7 + 7):  # Extra week for padding
+        d = today - timedelta(days=i)
+        all_sessions.extend(store.load_sessions(d))
+
+    if not all_sessions:
+        console.print("[yellow]No sessions found. Run 'workflowx capture' first.[/yellow]")
+        return
+
+    computed = compute_friction_trends(all_sessions, num_weeks=weeks)
+    text = format_trends_report(computed)
+    console.print(text)
+
+
+# ── EXPORT (Phase 2) ─────────────────────────────────────────
+
+
+@cli.command(name="export")
+@click.option("--format", "fmt", type=click.Choice(["json", "csv"]), default="json")
+@click.option("--data", type=click.Choice(["sessions", "patterns", "trends"]), default="sessions")
+@click.option("--days", default=7, help="Number of days of sessions to export")
+@click.option("--output", "-o", type=click.Path(), default=None, help="Output file path")
+def export_cmd(fmt: str, data: str, days: int, output: str | None) -> None:
+    """Export workflow data to JSON or CSV."""
+    from workflowx.config import load_config
+    from workflowx.export import (
+        export_to_file,
+        patterns_to_csv,
+        patterns_to_json,
+        sessions_to_csv,
+        sessions_to_json,
+        trends_to_csv,
+        trends_to_json,
+    )
+    from workflowx.storage import LocalStore
+
+    config = load_config()
+    store = LocalStore(config.data_dir)
+
+    if data == "sessions":
+        today = date.today()
+        all_sessions = []
+        for i in range(days):
+            d = today - timedelta(days=i)
+            all_sessions.extend(store.load_sessions(d))
+
+        if not all_sessions:
+            console.print("[yellow]No sessions to export.[/yellow]")
+            return
+
+        content = sessions_to_json(all_sessions) if fmt == "json" else sessions_to_csv(all_sessions)
+        default_name = f"workflowx-sessions-{days}d.{fmt}"
+
+    elif data == "patterns":
+        found = store.load_patterns()
+        if not found:
+            console.print("[yellow]No patterns found. Run 'workflowx patterns' first.[/yellow]")
+            return
+        content = patterns_to_json(found) if fmt == "json" else patterns_to_csv(found)
+        default_name = f"workflowx-patterns.{fmt}"
+
+    elif data == "trends":
+        from workflowx.inference.patterns import compute_friction_trends
+        today = date.today()
+        all_sessions = []
+        for i in range(35):
+            d = today - timedelta(days=i)
+            all_sessions.extend(store.load_sessions(d))
+        computed = compute_friction_trends(all_sessions)
+        if not computed:
+            console.print("[yellow]No trends to export.[/yellow]")
+            return
+        content = trends_to_json(computed) if fmt == "json" else trends_to_csv(computed)
+        default_name = f"workflowx-trends.{fmt}"
+    else:
+        console.print("[red]Unknown data type.[/red]")
+        return
+
+    out_path = Path(output) if output else Path(default_name)
+    export_to_file(content, out_path)
+    console.print(f"[green]Exported to {out_path}[/green] ({len(content)} bytes)")
+
+
+# ── MCP (Phase 2) ────────────────────────────────────────────
+
+
+@cli.command()
+@click.option("--http", "use_http", is_flag=True, help="Use HTTP transport instead of stdio")
+@click.option("--port", default=8765, help="HTTP port (only with --http)")
+def mcp(use_http: bool, port: int) -> None:
+    """Start MCP server for Claude/Cursor integration."""
+    from workflowx.mcp_server import run_mcp_http, run_mcp_stdio
+
+    if use_http:
+        console.print(f"Starting MCP server on http://localhost:{port}")
+        console.print("Add to Claude Code: workflowx mcp --http --port {port}")
+        run_mcp_http(port=port)
+    else:
+        # Stdio mode — no console output (it would break the protocol)
+        run_mcp_stdio()
+
+
+# ── ADOPT (Phase 3) ──────────────────────────────────────────
+
+
+@cli.command()
+@click.argument("intent")
+@click.option("--before-minutes", type=float, required=True, help="Minutes/week before replacement")
+def adopt(intent: str, before_minutes: float) -> None:
+    """Mark a workflow replacement as adopted and start tracking ROI.
+
+    INTENT is the workflow intent string (e.g., "competitive research").
+    """
+    from workflowx.measurement import create_outcome
+    from workflowx.models import ReplacementProposal
+    from workflowx.config import load_config
+    from workflowx.storage import LocalStore
+
+    config = load_config()
+    store = LocalStore(config.data_dir)
+
+    # Create a lightweight proposal reference
+    proposal = ReplacementProposal(
+        diagnosis_id=f"adopted_{intent.lower().replace(' ', '_')[:30]}",
+        original_workflow=intent,
+        proposed_workflow="(user-adopted replacement)",
+        mechanism="User confirmed adoption",
+    )
+
+    outcome = create_outcome(proposal, before_minutes_per_week=before_minutes)
+    store.save_outcome(outcome)
+
+    console.print(f"\n[green]Tracking started![/green]")
+    console.print(f"  Intent: {intent}")
+    console.print(f"  Baseline: {before_minutes:.0f} min/week")
+    console.print(f"  Status: measuring")
+    console.print(f"\nRun 'workflowx measure' after a week to see actual savings.\n")
+
+
+# ── MEASURE (Phase 3) ────────────────────────────────────────
+
+
+@cli.command()
+@click.option("--days", default=7, help="Days of recent data to measure against")
+def measure(days: int) -> None:
+    """Measure actual ROI of adopted replacements."""
+    from workflowx.config import load_config
+    from workflowx.measurement import format_roi_report, measure_outcome
+    from workflowx.storage import LocalStore
+
+    config = load_config()
+    store = LocalStore(config.data_dir)
+    outcomes = store.load_outcomes()
+
+    if not outcomes:
+        console.print("[yellow]No outcomes tracked. Run 'workflowx adopt' first.[/yellow]")
+        return
+
+    # Load recent sessions
+    today = date.today()
+    recent_sessions = []
+    for i in range(days):
+        d = today - timedelta(days=i)
+        recent_sessions.extend(store.load_sessions(d))
+
+    console.print(f"Measuring {len(outcomes)} outcomes against {len(recent_sessions)} recent sessions...\n")
+
+    active = [o for o in outcomes if o.status in ("measuring", "adopted")]
+    for outcome in active:
+        outcome = measure_outcome(outcome, recent_sessions, lookback_days=days)
+        store.save_outcome(outcome)
+
+    # Reload and display
+    outcomes = store.load_outcomes()
+    text = format_roi_report(outcomes, hourly_rate=config.hourly_rate_usd)
+    console.print(text)
+
+
+# ── DASHBOARD (Phase 3) ──────────────────────────────────────
+
+
+@cli.command()
+@click.option("--output", "-o", type=click.Path(), default="workflowx-dashboard.html")
+def dashboard(output: str) -> None:
+    """Generate an HTML ROI dashboard."""
+    from workflowx.config import load_config
+    from workflowx.dashboard import generate_dashboard_html
+    from workflowx.inference.patterns import compute_friction_trends, detect_patterns
+    from workflowx.storage import LocalStore
+
+    config = load_config()
+    store = LocalStore(config.data_dir)
+
+    # Load data
+    today = date.today()
+    all_sessions = []
+    for i in range(30):
+        d = today - timedelta(days=i)
+        all_sessions.extend(store.load_sessions(d))
+
+    if not all_sessions:
+        console.print("[yellow]No sessions found. Run 'workflowx capture' first.[/yellow]")
+        return
+
+    found_patterns = detect_patterns(all_sessions)
+    computed_trends = compute_friction_trends(all_sessions)
+    outcomes = store.load_outcomes()
+
+    html = generate_dashboard_html(
+        trends=computed_trends,
+        patterns=found_patterns,
+        outcomes=outcomes,
+        hourly_rate=config.hourly_rate_usd,
+    )
+
+    out_path = Path(output)
+    out_path.write_text(html)
+    console.print(f"[green]Dashboard generated: {out_path}[/green]")
+    console.print(f"Open in your browser to see the ROI dashboard.")
 
 
 # ── HELPERS ───────────────────────────────────────────────────

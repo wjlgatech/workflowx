@@ -7,7 +7,7 @@ Each day's data is a separate JSON file in ~/.workflowx/
 from __future__ import annotations
 
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -15,9 +15,11 @@ import structlog
 
 from workflowx.models import (
     ClassificationQuestion,
-    WorkflowDiagnosis,
-    WorkflowSession,
+    ReplacementOutcome,
     WeeklyReport,
+    WorkflowDiagnosis,
+    WorkflowPattern,
+    WorkflowSession,
 )
 
 logger = structlog.get_logger()
@@ -35,6 +37,10 @@ class LocalStore:
         self.questions_dir.mkdir(exist_ok=True)
         self.reports_dir = self.data_dir / "reports"
         self.reports_dir.mkdir(exist_ok=True)
+        self.patterns_dir = self.data_dir / "patterns"
+        self.patterns_dir.mkdir(exist_ok=True)
+        self.outcomes_dir = self.data_dir / "outcomes"
+        self.outcomes_dir.mkdir(exist_ok=True)
 
     def _date_path(self, base_dir: Path, d: date) -> Path:
         return base_dir / f"{d.isoformat()}.json"
@@ -73,16 +79,12 @@ class LocalStore:
         return [WorkflowSession.model_validate(s) for s in raw]
 
     def load_sessions_range(self, start: date, end: date) -> list[WorkflowSession]:
-        """Load sessions across a date range."""
+        """Load sessions across a date range (inclusive)."""
         sessions = []
         current = start
         while current <= end:
             sessions.extend(self.load_sessions(current))
-            current = date(
-                current.year,
-                current.month,
-                current.day + 1 if current.day < 28 else 1,
-            )
+            current += timedelta(days=1)
         return sessions
 
     # ── Classification Questions ──────────────────────────────
@@ -132,6 +134,55 @@ class LocalStore:
         data = json.loads(report.model_dump_json())
         self._save_json(path, data)
         return path
+
+    # ── Patterns (Phase 2) ────────────────────────────────────
+
+    def save_patterns(self, patterns: list[WorkflowPattern]) -> Path:
+        """Save detected patterns."""
+        path = self.patterns_dir / "latest.json"
+        data = [json.loads(p.model_dump_json()) for p in patterns]
+        self._save_json(path, data)
+        logger.info("patterns_saved", count=len(patterns))
+        return path
+
+    def load_patterns(self) -> list[WorkflowPattern]:
+        """Load latest detected patterns."""
+        path = self.patterns_dir / "latest.json"
+        raw = self._load_json_list(path)
+        return [WorkflowPattern.model_validate(p) for p in raw]
+
+    # ── Replacement Outcomes (Phase 3) ────────────────────────
+
+    def save_outcomes(self, outcomes: list[ReplacementOutcome]) -> Path:
+        """Save replacement outcomes."""
+        path = self.outcomes_dir / "outcomes.json"
+        existing = self._load_json_list(path)
+        existing_ids = {o.get("id") for o in existing}
+
+        for outcome in outcomes:
+            data = json.loads(outcome.model_dump_json())
+            if outcome.id not in existing_ids:
+                existing.append(data)
+                existing_ids.add(outcome.id)
+            else:
+                existing = [
+                    data if o.get("id") == outcome.id else o
+                    for o in existing
+                ]
+
+        self._save_json(path, existing)
+        logger.info("outcomes_saved", count=len(outcomes))
+        return path
+
+    def load_outcomes(self) -> list[ReplacementOutcome]:
+        """Load all replacement outcomes."""
+        path = self.outcomes_dir / "outcomes.json"
+        raw = self._load_json_list(path)
+        return [ReplacementOutcome.model_validate(o) for o in raw]
+
+    def save_outcome(self, outcome: ReplacementOutcome) -> Path:
+        """Save or update a single outcome."""
+        return self.save_outcomes([outcome])
 
     # ── Helpers ────────────────────────────────────────────────
 

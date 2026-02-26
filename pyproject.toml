@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "workflowx"
-version = "0.1.0"
+version = "0.2.0"
 description = "Observe workflows. Understand intent. Replace friction. Measure improvement."
 readme = "README.md"
 license = { text = "MIT" }
@@ -50,8 +50,11 @@ api = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
 ]
+mcp = [
+    "mcp>=1.0",               # MCP server for Claude/Cursor integration
+]
 all = [
-    "workflowx[capture,inference,replacement,api]",
+    "workflowx[capture,inference,replacement,api,mcp]",
 ]
 dev = [
     "pytest>=8.0",

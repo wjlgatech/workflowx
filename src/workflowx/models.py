@@ -106,3 +106,68 @@ class WeeklyReport(BaseModel):
     top_friction_points: list[WorkflowDiagnosis] = Field(default_factory=list)
     proposals: list[ReplacementProposal] = Field(default_factory=list)
     total_estimated_savings_minutes: float = 0.0
+
+
+# ── Phase 2: Pattern Detection & Trends ──────────────────────
+
+
+class WorkflowPattern(BaseModel):
+    """A recurring workflow pattern detected across multiple days.
+
+    When you do "competitive research" every Tuesday and Thursday for 50 minutes
+    with 20+ context switches, that's a pattern. It means this isn't a one-off —
+    it's a structural inefficiency worth replacing.
+    """
+
+    id: str
+    intent: str
+    occurrences: int = 0
+    first_seen: datetime
+    last_seen: datetime
+    avg_duration_minutes: float = 0.0
+    most_common_friction: FrictionLevel = FrictionLevel.LOW
+    avg_context_switches: float = 0.0
+    session_ids: list[str] = Field(default_factory=list)
+    trend: str = ""  # "improving", "worsening", "stable"
+    total_time_invested_minutes: float = 0.0
+    apps_involved: list[str] = Field(default_factory=list)
+
+
+class FrictionTrend(BaseModel):
+    """Weekly friction trend snapshot.
+
+    Compare these week-over-week to answer: "Am I getting better or worse?"
+    """
+
+    week_label: str  # e.g., "2026-W09"
+    week_start: datetime
+    week_end: datetime
+    total_sessions: int = 0
+    total_minutes: float = 0.0
+    high_friction_minutes: float = 0.0
+    high_friction_ratio: float = 0.0  # 0.0-1.0
+    avg_switches_per_session: float = 0.0
+    top_friction_intents: list[str] = Field(default_factory=list)
+
+
+# ── Phase 3: Replacement Outcomes & ROI ──────────────────────
+
+
+class ReplacementOutcome(BaseModel):
+    """Tracks whether a replacement proposal was adopted and its actual ROI.
+
+    This closes the loop. Without measurement, we're just another advice tool.
+    """
+
+    id: str
+    proposal_id: str  # Links back to ReplacementProposal
+    intent: str
+    adopted: bool = False
+    adopted_date: datetime | None = None
+    before_minutes_per_week: float = 0.0
+    after_minutes_per_week: float = 0.0
+    actual_savings_minutes: float = 0.0
+    cumulative_savings_minutes: float = 0.0
+    weeks_tracked: int = 0
+    notes: str = ""
+    status: str = "pending"  # "pending", "adopted", "rejected", "measuring"
