@@ -26,6 +26,29 @@ import structlog
 logger = structlog.get_logger()
 
 
+def _run_async(coro):
+    """Run an async coroutine, handling both sync and async calling contexts.
+
+    When called from the MCP server (which runs its own event loop),
+    asyncio.run() fails. We detect this and use the existing loop instead.
+    """
+    import asyncio
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        # Already inside an event loop (MCP server context).
+        # Create a task and run it via nest_asyncio or a thread.
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result()
+    else:
+        return asyncio.run(coro)
+
+
 # ── Shared Helpers ──────────────────────────────────────────
 
 
@@ -180,7 +203,6 @@ def handle_analyze(period: str = "today") -> dict[str, Any]:
     and infers what you were trying to accomplish in each session.
     Requires an API key (ANTHROPIC_API_KEY or OPENAI_API_KEY).
     """
-    import asyncio
     from workflowx.config import load_config
     from workflowx.storage import LocalStore
 
@@ -234,7 +256,7 @@ def handle_analyze(period: str = "today") -> dict[str, Any]:
                     sessions[j] = updated
             analyzed.append(updated)
 
-    asyncio.run(_run())
+    _run_async(_run())
     store.save_sessions(sessions, d)
 
     return {
@@ -399,7 +421,6 @@ def handle_propose(top: int = 3) -> dict[str, Any]:
     This is the REPLACE step. The LLM reimagines each workflow from its goal,
     not just automating existing steps. Requires an API key.
     """
-    import asyncio
     from workflowx.config import load_config
     from workflowx.inference.intent import diagnose_workflow
     from workflowx.storage import LocalStore
@@ -464,7 +485,7 @@ def handle_propose(top: int = 3) -> dict[str, Any]:
             proposal = await propose_replacement(diag, session, client, config.llm_model)
             proposals.append((diag, proposal))
 
-    asyncio.run(_run())
+    _run_async(_run())
 
     return {
         "status": "ok",
