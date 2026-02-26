@@ -86,7 +86,7 @@ class ScreenpipeAdapter:
     ) -> list[RawEvent]:
         """Read OCR screen capture events."""
         query = """
-            SELECT f.timestamp, f.app_name, f.window_name, f.text_output
+            SELECT f.timestamp, f.app_name, f.window_name, ot.text AS text_output
             FROM ocr_text ot
             JOIN frames f ON ot.frame_id = f.id
             WHERE 1=1

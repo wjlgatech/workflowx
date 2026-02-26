@@ -44,7 +44,7 @@ async def propose_replacement(
     diagnosis: WorkflowDiagnosis,
     session: WorkflowSession,
     llm_client: Any,
-    model: str = "claude-sonnet-4-5-20250514",
+    model: str = "claude-sonnet-4-6",
 ) -> ReplacementProposal:
     """Generate a replacement proposal for a diagnosed workflow."""
 
@@ -70,7 +70,12 @@ async def propose_replacement(
             )
             content = response.choices[0].message.content
 
-        result = json.loads(content)
+        # Strip markdown code fences if present (```json ... ```)
+        stripped = content.strip()
+        if stripped.startswith("```"):
+            stripped = stripped.split("\n", 1)[-1]
+            stripped = stripped.rsplit("```", 1)[0].strip()
+        result = json.loads(stripped)
 
         # Generate Agenticom YAML if pipeline was proposed
         agenticom_yaml = ""

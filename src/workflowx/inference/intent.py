@@ -67,7 +67,7 @@ def build_session_summary(session: WorkflowSession) -> str:
 async def infer_intent(
     session: WorkflowSession,
     llm_client: Any,  # anthropic.AsyncAnthropic or openai.AsyncOpenAI
-    model: str = "claude-sonnet-4-5-20250514",
+    model: str = "claude-sonnet-4-6",
 ) -> tuple[WorkflowSession, ClassificationQuestion | None]:
     """Infer the intent of a workflow session using an LLM.
 
@@ -98,7 +98,12 @@ async def infer_intent(
             )
             content = response.choices[0].message.content
 
-        result = json.loads(content)
+        # Strip markdown code fences if present (```json ... ```)
+        stripped = content.strip()
+        if stripped.startswith("```"):
+            stripped = stripped.split("\n", 1)[-1]
+            stripped = stripped.rsplit("```", 1)[0].strip()
+        result = json.loads(stripped)
 
         session.inferred_intent = result.get("intent", "unknown")
         session.confidence = result.get("confidence", 0.0)

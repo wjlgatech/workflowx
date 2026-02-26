@@ -38,7 +38,7 @@ class WorkflowXConfig(BaseModel):
         default_factory=lambda: os.getenv("WORKFLOWX_LLM_PROVIDER", "anthropic")  # type: ignore[arg-type]
     )
     llm_model: str = Field(
-        default_factory=lambda: os.getenv("WORKFLOWX_LLM_MODEL", "claude-sonnet-4-5-20250514")
+        default_factory=lambda: os.getenv("WORKFLOWX_LLM_MODEL", "claude-sonnet-4-6")
     )
     anthropic_api_key: str = Field(
         default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", "")
