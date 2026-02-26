@@ -149,7 +149,29 @@ ln -sf /opt/homebrew/opt/ffmpeg@7/bin/ffmpeg ~/.local/bin/ffmpeg
 npx screenpipe@latest record
 ```
 
-### Run the Pipeline
+### Option A — Fully Automated (recommended)
+
+```bash
+# Start the background daemon — runs everything on a smart schedule
+workflowx daemon start
+
+# Check what's running and when it will fire next
+workflowx daemon status
+
+# Open the live dashboard (updates on demand)
+workflowx serve
+
+# Stop the daemon
+workflowx daemon stop
+```
+
+The daemon runs silently. You get macOS notifications when:
+- Screenpipe goes offline or drops frames
+- Classification questions need your input
+- A CRITICAL/HIGH-friction session needs a replacement proposal
+- The morning brief fires at 8:30am with yesterday's summary
+
+### Option B — Manual Pipeline
 
 ```bash
 # Read today's events from Screenpipe
@@ -171,10 +193,13 @@ workflowx propose
 workflowx adopt "competitive research" --before-minutes 50
 workflowx measure --days 7
 
-# Generate HTML ROI dashboard
+# Static HTML dashboard (snapshot)
 workflowx dashboard -o roi.html
 
-# Start MCP server for Claude/Cursor
+# Live dashboard server with Update button
+workflowx serve
+
+# MCP server for Claude/Cursor integration
 workflowx mcp
 ```
 
@@ -207,7 +232,10 @@ src/workflowx/
 ├── storage.py             # Local JSON storage (file-per-day, privacy-first)
 ├── export.py              # JSON/CSV export for external analysis
 ├── measurement.py         # Before/after ROI tracking
-├── dashboard.py           # Self-contained HTML ROI dashboard (Chart.js)
+├── dashboard.py           # HTML ROI dashboard (static snapshot + live server mode)
+├── server.py              # Live dashboard HTTP server — GET / and GET /api/data
+├── daemon.py              # Background scheduler: all pipeline stages, smart cadences
+├── notifications.py       # macOS native notifications via osascript
 ├── mcp_server.py          # MCP server — lets Claude/Cursor query your workflow data
 ├── capture/               # Data source adapters (don't rebuild capture, use it)
 │   ├── screenpipe.py      # Reads Screenpipe's SQLite DB directly
@@ -220,7 +248,7 @@ src/workflowx/
 ├── replacement/           # Workflow reimagination engine
 │   └── engine.py          # LLM-powered proposals + Agenticom YAML generation
 ├── api/                   # FastAPI endpoints (Phase 4)
-└── cli/                   # Click CLI — 12 commands
+└── cli/                   # Click CLI — 16 commands
     └── main.py
 ```
 
@@ -229,8 +257,9 @@ src/workflowx/
 1. **Don't rebuild capture.** Screenpipe is MIT, 12.6k stars, cross-platform. We read its SQLite DB — we don't reinvent screen recording.
 2. **Local-first.** All data stays on your device. No cloud. No telemetry. No surveillance.
 3. **Models are the contract.** Every piece of the system speaks `models.py`. Add a new data source? Map it to `RawEvent`. Add a new output? Build on `WorkflowSession`.
-4. **LLM calls are isolated.** Only `inference/intent.py` and `replacement/engine.py` call LLMs. Everything else — clustering, scoring, storage, reporting — is deterministic and fully testable.
-5. **Measure everything.** A workflow intelligence tool that can't prove ROI is just an advice column. `measurement.py` closes the loop.
+4. **LLM calls are isolated.** Only `inference/intent.py` and `replacement/engine.py` call LLMs. Everything else — clustering, scoring, storage, reporting, scheduling — is deterministic and fully testable.
+5. **Daemon logic is pure.** Scheduling decisions (`next_fire_time`, `should_measure`, `should_propose`) are plain functions with no I/O — 61 tests cover every edge case without asyncio.
+6. **Measure everything.** A workflow intelligence tool that can't prove ROI is just an advice column. `measurement.py` closes the loop.
 
 ---
 
@@ -253,6 +282,22 @@ Replacement proposals aren't just text. Each proposal includes a machine-readabl
 
 ### 6. MCP Server for Claude/Cursor
 `workflowx mcp` starts an MCP server exposing 5 tools: `get_sessions`, `get_friction_points`, `get_patterns`, `get_trends`, `get_roi`. Claude or Cursor can query your workflow data mid-conversation: *"Show me my highest-friction workflows from this week."*
+
+### 7. Background Daemon with Smart Cadences
+`workflowx daemon start` installs a macOS launchd agent that runs the full pipeline automatically — invisible until it needs you.
+
+```
+health:  every 5 min       — Screenpipe liveness; notifies if frames drop
+capture: 12:55·17:55·22:55 — rolls up last 4h of Screenpipe events (every day)
+analyze: 13:00·18:00·23:00 — LLM inference; event-triggers propose on HIGH/CRITICAL
+measure: 07:00 daily       — adaptive ROI: weekly for 30 days, monthly after
+brief:   08:30 weekdays    — morning notification: friction summary + pending actions
+```
+
+The propose step is event-driven, not time-driven: it only fires when a new HIGH or CRITICAL session is found and hasn't already triggered a notification. No spam, no redundancy.
+
+### 8. Live Dashboard Server
+`workflowx serve` opens a local HTTP server at `localhost:7788`. The dashboard fetches fresh data from `/api/data` on load and whenever you click **↻ Update** — no file regeneration, no page reload. Zero new dependencies (Python stdlib `http.server`).
 
 ---
 
@@ -286,8 +331,12 @@ Replacement proposals aren't just text. Each proposal includes a machine-readabl
 - [x] Agenticom workflow YAML generation
 - [x] Before/after ROI measurement
 - [x] Self-contained HTML ROI dashboard (Chart.js)
+- [x] Live dashboard server with Update button (`workflowx serve`)
 - [x] Adoption tracking with cumulative savings
-- [x] CLI: `adopt`, `measure`, `dashboard`
+- [x] Background daemon — full pipeline on smart schedule (`workflowx daemon`)
+- [x] macOS native notifications (health alerts, friction detection, morning brief)
+- [x] CLI: `adopt`, `measure`, `dashboard`, `serve`, `daemon start/stop/status`
+- [x] 134 tests, CI pipeline
 
 ### Phase 4: Team Intelligence (v0.4)
 
@@ -346,7 +395,7 @@ git clone https://github.com/wjlgatech/workflowx.git
 cd workflowx
 python3 -m venv .venv && source .venv/bin/activate
 make install-dev
-make test   # 63 tests — all green before you PR
+make test   # 134 tests — all green before you PR
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
