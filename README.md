@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.png" alt="WorkflowX" width="120" />
+  <img src="assets/logo-sm.png" alt="WorkflowX" width="200" />
 </p>
 
 <h1 align="center">WorkflowX</h1>
@@ -281,7 +281,7 @@ Friction is computed as `context_switches / max(duration_minutes, 0.1)`. Thresho
 Replacement proposals aren't just text. Each proposal includes a machine-readable Agenticom workflow YAML that can be executed directly — no manual translation from "here's what to do" to "here's how to automate it."
 
 ### 6. MCP Server for Claude/Cursor
-`workflowx mcp` starts an MCP server exposing 5 tools: `get_sessions`, `get_friction_points`, `get_patterns`, `get_trends`, `get_roi`. Claude or Cursor can query your workflow data mid-conversation: *"Show me my highest-friction workflows from this week."*
+`workflowx mcp` starts an MCP server exposing 12 tools across the full observe→understand→replace→measure loop. Claude or Cursor can query your workflow data mid-conversation: *"Show me my highest-friction workflows from this week"* — then propose a replacement and track ROI, all without leaving the chat.
 
 ### 7. Background Daemon with Smart Cadences
 `workflowx daemon start` installs a macOS launchd agent that runs the full pipeline automatically — invisible until it needs you.
