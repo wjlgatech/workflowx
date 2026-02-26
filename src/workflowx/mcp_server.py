@@ -789,3 +789,7 @@ def run_mcp_http(host: str = "localhost", port: int = 8765):
     if server is None:
         raise RuntimeError("MCP server requires the 'mcp' package.")
     server.run(transport="sse", host=host, port=port)
+
+
+if __name__ == "__main__":
+    run_mcp_stdio()
