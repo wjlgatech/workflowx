@@ -151,21 +151,26 @@ src/workflowx/
 
 ## Roadmap
 
-### Phase 1: Self-Awareness (v0.1) — *In Progress*
+### Phase 1: Self-Awareness (v0.1) — *Complete*
 
-- [x] Core domain models
+- [x] Core domain models (8 Pydantic models)
 - [x] Screenpipe capture adapter
+- [x] ActivityWatch capture adapter
 - [x] Session clustering with friction heuristics
-- [x] CLI: `capture`, `analyze`, `status`
-- [ ] LLM intent inference (Anthropic + OpenAI)
-- [ ] Classification questions (user validation loop)
-- [ ] Daily workflow report
-- [ ] ActivityWatch adapter
+- [x] LLM intent inference (Anthropic + OpenAI + Ollama)
+- [x] Classification questions (user validation loop)
+- [x] Daily + weekly workflow reports
+- [x] Replacement engine with Agenticom YAML generation
+- [x] Full CLI: `capture`, `analyze`, `validate`, `report`, `propose`, `status`
+- [x] Local JSON storage (privacy-first, file-per-day)
+- [x] Config from env vars (.env support)
+- [x] 24 tests passing, CI pipeline
 
 ### Phase 2: Diagnosis (v0.2)
 
+- [ ] Pattern detection (recurring high-friction workflows across days)
+- [ ] Weekly friction trends (is friction going up or down?)
 - [ ] Workflow diagnosis engine (cost attribution, automation scoring)
-- [ ] Weekly friction report with trends
 - [ ] Pattern detection (recurring high-friction workflows)
 - [ ] Export to JSON / CSV for external analysis
 - [ ] MCP server (let Claude / Cursor query your workflow data)
