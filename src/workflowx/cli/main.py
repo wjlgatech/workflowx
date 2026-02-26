@@ -13,7 +13,8 @@ Usage:
     workflowx mcp             # Start MCP server (Phase 2)
     workflowx adopt           # Mark a proposal as adopted (Phase 3)
     workflowx measure         # Measure actual ROI of adopted replacements (Phase 3)
-    workflowx dashboard       # Generate HTML ROI dashboard (Phase 3)
+    workflowx dashboard       # Generate static HTML ROI dashboard (Phase 3)
+    workflowx serve           # Live dashboard server with Update button (Phase 3)
 """
 
 from __future__ import annotations
@@ -657,6 +658,53 @@ def dashboard(output: str) -> None:
     out_path.write_text(html)
     console.print(f"[green]Dashboard generated: {out_path}[/green]")
     console.print(f"Open in your browser to see the ROI dashboard.")
+
+
+# ── SERVE (Phase 3) ──────────────────────────────────────────
+
+
+@cli.command()
+@click.option("--port", default=7788, help="Port to serve dashboard on (default: 7788)")
+def serve(port: int) -> None:
+    """Start a live dashboard server at http://localhost:PORT.
+
+    Unlike 'workflowx dashboard' which bakes data into a static file,
+    this serves a live page that fetches fresh data whenever you click
+    the Update button — no file regeneration needed.
+
+    Press Ctrl+C to stop.
+    """
+    from workflowx.config import load_config
+    from workflowx.server import run_server
+    from workflowx.storage import LocalStore
+
+    config = load_config()
+    store = LocalStore(config.data_dir)
+
+    url = f"http://localhost:{port}"
+    console.print(f"\n[bold]WorkflowX Live Dashboard[/bold]")
+    console.print(f"  URL:   [link={url}]{url}[/link]")
+    console.print(f"  Data:  {config.data_dir}")
+    console.print(f"  Press [bold]Ctrl+C[/bold] to stop\n")
+
+    try:
+        import webbrowser
+        webbrowser.open(url)
+    except Exception:
+        pass
+
+    try:
+        run_server(config, store, port=port)
+    except KeyboardInterrupt:
+        console.print("\n[dim]Dashboard server stopped.[/dim]")
+    except OSError as e:
+        if "Address already in use" in str(e):
+            console.print(
+                f"[red]Port {port} is already in use.[/red] "
+                f"Try: workflowx serve --port {port + 1}"
+            )
+        else:
+            raise
 
 
 # ── DEMO ──────────────────────────────────────────────────────
