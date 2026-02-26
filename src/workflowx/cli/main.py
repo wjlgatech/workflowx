@@ -913,8 +913,8 @@ def daemon_status() -> None:
     now = datetime.now()
     console.print(f"\n[bold]Upcoming Runs[/bold]  (as of {now.strftime('%H:%M')})")
     upcoming = [
-        ("capture", next_fire_time(CAPTURE_TIMES, weekdays_only=True,  now=now)),
-        ("analyze", next_fire_time(ANALYZE_TIMES, weekdays_only=True,  now=now)),
+        ("capture", next_fire_time(CAPTURE_TIMES, weekdays_only=False, now=now)),
+        ("analyze", next_fire_time(ANALYZE_TIMES, weekdays_only=False, now=now)),
         ("measure", next_fire_time(MEASURE_TIMES, weekdays_only=False, now=now)),
         ("brief",   next_fire_time(BRIEF_TIMES,   weekdays_only=True,  now=now)),
     ]

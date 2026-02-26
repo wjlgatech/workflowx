@@ -34,8 +34,8 @@ logger = structlog.get_logger()
 
 # ── Schedule constants ────────────────────────────────────────────────────────
 
-CAPTURE_TIMES = [time(12, 55), time(17, 55)]   # 5 min before analyze
-ANALYZE_TIMES = [time(13, 0),  time(18, 0)]
+CAPTURE_TIMES = [time(12, 55), time(17, 55), time(22, 55)]  # 5 min before analyze
+ANALYZE_TIMES = [time(13, 0),  time(18, 0),  time(23, 0)]   # +late evening slot
 MEASURE_TIMES = [time(7, 0)]
 BRIEF_TIMES   = [time(8, 30)]
 HEALTH_INTERVAL_SECONDS = 300  # 5 minutes
@@ -544,9 +544,9 @@ async def health_loop(config: Any, state_path: Path) -> None:
 
 
 async def capture_loop(config: Any, store: Any, state_path: Path) -> None:
-    """Capture loop: fires at CAPTURE_TIMES on weekdays."""
+    """Capture loop: fires at CAPTURE_TIMES every day (including weekends)."""
     while True:
-        target = next_fire_time(CAPTURE_TIMES, weekdays_only=True)
+        target = next_fire_time(CAPTURE_TIMES, weekdays_only=False)
         state  = read_state(state_path)
         state.jobs.setdefault("capture", JobState()).next_run = target
         write_state(state, state_path)
@@ -559,7 +559,7 @@ async def capture_loop(config: Any, store: Any, state_path: Path) -> None:
             state.jobs["capture"] = JobState(
                 last_run=datetime.now(),
                 last_status="ok" if n > 0 else "skipped",
-                next_run=next_fire_time(CAPTURE_TIMES, weekdays_only=True),
+                next_run=next_fire_time(CAPTURE_TIMES, weekdays_only=False),
             )
         except Exception as e:
             logger.error("capture_loop_error", error=str(e))
@@ -570,9 +570,9 @@ async def capture_loop(config: Any, store: Any, state_path: Path) -> None:
 
 
 async def analyze_loop(config: Any, store: Any, state_path: Path) -> None:
-    """Analyze loop: fires at ANALYZE_TIMES on weekdays, then event-triggers propose."""
+    """Analyze loop: fires at ANALYZE_TIMES every day, then event-triggers propose."""
     while True:
-        target = next_fire_time(ANALYZE_TIMES, weekdays_only=True)
+        target = next_fire_time(ANALYZE_TIMES, weekdays_only=False)
         state  = read_state(state_path)
         state.jobs.setdefault("analyze", JobState()).next_run = target
         write_state(state, state_path)
@@ -593,7 +593,7 @@ async def analyze_loop(config: Any, store: Any, state_path: Path) -> None:
             state.jobs["analyze"] = JobState(
                 last_run=datetime.now(),
                 last_status="ok",
-                next_run=next_fire_time(ANALYZE_TIMES, weekdays_only=True),
+                next_run=next_fire_time(ANALYZE_TIMES, weekdays_only=False),
             )
         except Exception as e:
             logger.error("analyze_loop_error", error=str(e))
