@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo-sm.png" alt="WorkflowX" width="200" />
+  <img src="docs/logo.jpg" alt="WorkflowX" width="420" />
 </p>
 
 <h1 align="center">WorkflowX</h1>
@@ -17,13 +17,83 @@
 </p>
 
 <p align="center">
+  <a href="#the-flywheel">The Flywheel</a> &bull;
   <a href="#real-result">Real Result</a> &bull;
   <a href="#quickstart">Quickstart</a> &bull;
   <a href="#how-it-works">How It Works</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
-  <a href="#roadmap">Roadmap</a> &bull;
-  <a href="#contributing">Contributing</a>
+  <a href="#roadmap">Roadmap</a>
 </p>
+
+---
+
+## The Flywheel
+
+Three open-source systems. One closed loop. Each spin makes the next one faster.
+
+```
+                        ┌─────────────────────────┐
+                        │      SCREENPIPE          │
+                        │   (Capture Everything)   │
+                        │                          │
+                        │  OCR · audio · app logs  │
+                        │  local-first · MIT       │
+                        └────────────┬────────────┘
+                                     │
+                                     ▼
+                        ┌─────────────────────────┐
+                        │      WORKFLOWX           │
+                        │  (Understand + Replace)  │
+                        │                          │
+                        │  intent inference        │
+                        │  friction diagnosis      │
+                        │  replacement proposals   │
+                        │  ROI measurement         │
+                        └────────────┬────────────┘
+                                     │
+                                     ▼
+                        ┌─────────────────────────┐
+                        │      AGENTICOM           │
+                        │   (Execute Workflows)    │
+                        │                          │
+                        │  multi-agent YAML        │
+                        │  tool orchestration      │
+                        │  autonomous execution    │
+                        └────────────┬────────────┘
+                                     │
+                                     ▼
+                              ┌─────────────┐
+                              │  REAL WORK   │
+                              │  GETS DONE   │
+                              └──────┬──────┘
+                                     │
+                          ───────────┘
+                         │
+                         ▼
+              ┌──── feedback loop ────┐
+              │                       │
+              │  freed time creates   │
+              │  new captured data    │
+              │  → better inference   │
+              │  → smarter proposals  │
+              │  → measured ROI       │
+              │                       │
+              └───────────────────────┘
+```
+
+**Screenpipe** records everything you do — OCR, audio, app switches — locally, privately, continuously. It captures *everything* but understands *nothing*.
+
+**WorkflowX** reads Screenpipe's raw stream and asks the question no other tool asks: *what were you trying to accomplish, and why did it take so long?* It infers intent, scores friction, proposes replacement workflows, and measures whether the replacement actually saved time.
+
+**Agenticom** takes WorkflowX's machine-readable YAML proposals and executes them — multi-agent orchestration that actually does the work, not just describes it.
+
+The flywheel compounds:
+
+- **Spin 1:** Screenpipe captures your day. WorkflowX finds you spent 52 minutes on competitive research with 23 app switches. It proposes an Agenticom workflow that does it in 3 minutes.
+- **Spin 2:** You adopt the replacement. WorkflowX measures the actual before/after. The 49 minutes you saved generate *new* captured data — higher-value work that Screenpipe records, WorkflowX analyzes, and the cycle repeats.
+- **Spin N:** Your validated replacements become a library. Patterns emerge across days and weeks. The system stops proposing — it starts *predicting* which workflow will fight you next.
+
+Every productivity tool on the market is a speedometer. This flywheel is a GPS that rebuilds the road.
 
 ---
 
@@ -88,13 +158,9 @@ Every productivity tool on the market shows you a time pie chart and says "good 
 | RescueTime, Toggl | Counts time per app | Doesn't know *why* you used the app |
 | Hubstaff, ActivTrak | Screenshots your screen | Surveillance, not intelligence |
 | Celonis | Mines ERP system logs | Can't see what humans actually do |
-| Screenpipe | Records everything locally | Captures everything, understands nothing |
+| Screenpipe alone | Records everything locally | Captures everything, understands nothing |
 
-**WorkflowX sits in the gap.** It reads events from capture tools (Screenpipe, ActivityWatch), uses LLMs to infer *what you were trying to accomplish*, identifies friction, asks you one smart question to validate, then generates a replacement workflow with Agenticom YAML — ready to execute.
-
-```
-Screenpipe (capture)  →  WorkflowX (understand + replace)  →  Agenticom (execute)
-```
+**WorkflowX completes the flywheel.** Screenpipe captures. WorkflowX understands and replaces. Agenticom executes. No single tool in this table closes the loop from observation to autonomous execution to measured ROI.
 
 ---
 
@@ -108,15 +174,16 @@ WorkflowX sees that trail of events and says:
 >
 > *Proposed replacement: An Agenticom workflow that monitors these 12 competitor URLs, extracts pricing and feature changes daily, and delivers a structured brief to your Notion. Estimated time: 3 minutes/week. Savings: 49 minutes/week."*
 
-The full loop — nobody else closes it:
+The full flywheel — nobody else closes it:
 
 ```
-OBSERVE  →  INFER INTENT  →  DIAGNOSE FRICTION  →  VALIDATE WITH USER  →  REPLACE  →  MEASURE
-    ↑                                                                                      │
-    └──────────────────────────────────────────────────────────────────────────────────────┘
+SCREENPIPE           WORKFLOWX                                              AGENTICOM
+  capture  ──→  infer intent ──→ diagnose friction ──→ validate ──→ propose ──→ execute
+     ↑                                                                            │
+     └──────────────────────── measure ROI ← freed time creates new data ────────┘
 ```
 
-Activity trackers stop at OBSERVE. Process mining stops at DIAGNOSE. RPA copies the old workflow. WorkflowX reimagines the workflow from the goal backward.
+Activity trackers stop at capture. Process mining stops at diagnosis. RPA copies the old workflow. The flywheel reimagines the workflow from the goal backward — then proves it worked.
 
 ---
 
@@ -203,6 +270,23 @@ workflowx serve
 workflowx mcp
 ```
 
+### Option C — Agentic via Claude/Cursor (MCP)
+
+WorkflowX exposes 12 MCP tools across the full flywheel. Add it to Claude Desktop or Cursor and talk to your workflow data:
+
+```
+"Show me my highest-friction sessions this week"
+"What patterns keep repeating?"
+"Propose a replacement for that competitive research workflow"
+"Adopt it — my baseline was 50 minutes"
+"Measure ROI after a week"
+```
+
+```bash
+# One-command setup for Claude Desktop
+./setup-mcp.sh
+```
+
 ### Example Output
 
 ```
@@ -236,16 +320,16 @@ src/workflowx/
 ├── server.py              # Live dashboard HTTP server — GET / and GET /api/data
 ├── daemon.py              # Background scheduler: all pipeline stages, smart cadences
 ├── notifications.py       # macOS native notifications via osascript
-├── mcp_server.py          # MCP server — lets Claude/Cursor query your workflow data
-├── capture/               # Data source adapters (don't rebuild capture, use it)
+├── mcp_server.py          # 12 MCP tools — the agentic interface to the flywheel
+├── capture/               # SCREENPIPE layer — don't rebuild capture, use it
 │   ├── screenpipe.py      # Reads Screenpipe's SQLite DB directly
 │   └── activitywatch.py   # Reads ActivityWatch REST API
-├── inference/             # The intelligence layer ← this is our value
+├── inference/             # WORKFLOWX intelligence layer ← this is our value
 │   ├── clusterer.py       # Raw events → workflow sessions (deterministic IDs)
 │   ├── intent.py          # LLM intent inference + classification questions
 │   ├── reporter.py        # Daily/weekly report generation
 │   └── patterns.py        # Cross-day pattern detection + friction trends
-├── replacement/           # Workflow reimagination engine
+├── replacement/           # AGENTICOM integration layer
 │   └── engine.py          # LLM-powered proposals + Agenticom YAML generation
 ├── api/                   # FastAPI endpoints (Phase 4)
 └── cli/                   # Click CLI — 16 commands
@@ -265,25 +349,28 @@ src/workflowx/
 
 ## Technical Innovations
 
-### 1. LLM-Inferred Intent from Raw Events
+### 1. The Flywheel Architecture
+Most tools solve one piece: capture, or analysis, or automation. WorkflowX is the intelligence layer that connects Screenpipe (capture) to Agenticom (execution) into a self-improving loop. Each adopted replacement generates measured ROI data that feeds back into better proposals. The system gets smarter with every spin.
+
+### 2. LLM-Inferred Intent from Raw Events
 Most productivity tools count time. WorkflowX asks *why*. Given a sequence of `(app_name, window_title, OCR_text, timestamp)` tuples, Claude infers the user's actual goal — not "used Chrome for 52 minutes" but "doing competitive research to inform a pricing decision." This is the difference between a speedometer and a GPS.
 
-### 2. Deterministic Session Identity
+### 3. Deterministic Session Identity
 Sessions are clustered by time-gap heuristic and given deterministic IDs (`MD5(date + start_time)`). Re-running `capture` on the same day updates existing sessions via upsert rather than creating duplicates. Intent, friction score, and user validation persist across runs.
 
-### 3. Classification Questions at Confidence < 0.7
+### 4. Classification Questions at Confidence < 0.7
 When the LLM can't infer intent with >70% confidence, it generates a single multiple-choice question to ask the user. One question. Not a survey. The answer is stored and used to correct the inference. Over time, this creates a validated ground-truth dataset of your actual workflows.
 
-### 4. Friction as a First-Class Signal
+### 5. Friction as a First-Class Signal
 Friction is computed as `context_switches / max(duration_minutes, 0.1)`. Thresholds: `>3/min = CRITICAL`, `>1.5 = HIGH`, `>0.5 = MEDIUM`. Simple, fast, and validated: the sessions WorkflowX flags as CRITICAL are exactly the ones users identify as painful when asked.
 
-### 5. Agenticom YAML Generation
+### 6. Agenticom YAML Generation
 Replacement proposals aren't just text. Each proposal includes a machine-readable Agenticom workflow YAML that can be executed directly — no manual translation from "here's what to do" to "here's how to automate it."
 
-### 6. MCP Server for Claude/Cursor
-`workflowx mcp` starts an MCP server exposing 12 tools across the full observe→understand→replace→measure loop. Claude or Cursor can query your workflow data mid-conversation: *"Show me my highest-friction workflows from this week"* — then propose a replacement and track ROI, all without leaving the chat.
+### 7. 12-Tool MCP Server
+`workflowx mcp` starts an MCP server exposing 12 tools organized across the full flywheel: observe (`status`, `capture`, `analyze`, `sessions`), understand (`friction`, `patterns`, `trends`, `diagnose`), replace (`propose`, `adopt`), measure (`measure`, `roi`). Claude or Cursor becomes your dashboard — no custom UI needed.
 
-### 7. Background Daemon with Smart Cadences
+### 8. Background Daemon with Smart Cadences
 `workflowx daemon start` installs a macOS launchd agent that runs the full pipeline automatically — invisible until it needs you.
 
 ```
@@ -296,7 +383,7 @@ brief:   08:30 weekdays    — morning notification: friction summary + pending 
 
 The propose step is event-driven, not time-driven: it only fires when a new HIGH or CRITICAL session is found and hasn't already triggered a notification. No spam, no redundancy.
 
-### 8. Live Dashboard Server
+### 9. Live Dashboard Server
 `workflowx serve` opens a local HTTP server at `localhost:7788`. The dashboard fetches fresh data from `/api/data` on load and whenever you click **↻ Update** — no file regeneration, no page reload. Zero new dependencies (Python stdlib `http.server`).
 
 ---
@@ -325,17 +412,18 @@ The propose step is event-driven, not time-driven: it only fires when a new HIGH
 - [x] MCP server (Claude/Cursor integration)
 - [x] CLI: `patterns`, `trends`, `export`, `mcp`
 
-### Phase 3: Replacement (v0.3) — *Complete*
+### Phase 3: Replacement + Flywheel (v0.3) — *Complete*
 
 - [x] LLM-powered replacement proposal engine
 - [x] Agenticom workflow YAML generation
-- [x] Before/after ROI measurement
+- [x] Before/after ROI measurement — the flywheel's feedback signal
 - [x] Self-contained HTML ROI dashboard (Chart.js)
 - [x] Live dashboard server with Update button (`workflowx serve`)
 - [x] Adoption tracking with cumulative savings
 - [x] Background daemon — full pipeline on smart schedule (`workflowx daemon`)
 - [x] macOS native notifications (health alerts, friction detection, morning brief)
-- [x] CLI: `adopt`, `measure`, `dashboard`, `serve`, `daemon start/stop/status`
+- [x] 12-tool MCP server — agentic interface to the full flywheel
+- [x] CLI: `adopt`, `measure`, `dashboard`, `serve`, `daemon start/stop/status`, `mcp`
 - [x] 134 tests, CI pipeline
 
 ### Phase 4: Team Intelligence (v0.4)
@@ -352,6 +440,7 @@ The propose step is event-driven, not time-driven: it only fires when a new HIGH
 - [ ] Workflow marketplace (share/discover replacements)
 - [ ] Real-time friction alerts
 - [ ] Self-improving inference (learn from user corrections)
+- [ ] Agenticom deep integration (execute proposals directly from WorkflowX)
 
 ---
 
@@ -375,8 +464,9 @@ WorkflowX will always be:
 | User validation loop | **Yes** | No | No | No | No |
 | Workflow replacement | **Yes** | No | No | No | No |
 | Agenticom integration | **Yes** | No | No | No | No |
-| MCP server | **Yes** | No | Partial | No | No |
+| MCP server (12 tools) | **Yes** | No | Partial | No | No |
 | ROI measurement | **Yes** | No | No | Partial | Partial |
+| Closed-loop flywheel | **Yes** | No | No | No | No |
 | Open source | **MIT** | No | **MIT** | No | No |
 | Price | **Free** | $12/mo | Free | $$$$$ | $10–19/mo |
 
@@ -417,5 +507,5 @@ If this solves a real problem for you, star the repo. It helps others find it �
 
 <p align="center">
   <strong>Built by <a href="https://github.com/wjlgatech">@wjlgatech</a></strong><br>
-  <em>Observe. Understand. Replace. Measure. Repeat.</em>
+  <em>Screenpipe captures. WorkflowX understands. Agenticom executes. The flywheel spins.</em>
 </p>
