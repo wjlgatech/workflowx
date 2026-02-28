@@ -244,9 +244,38 @@ def validate() -> None:
         console.print("[green]No pending questions. All sessions validated.[/green]")
         return
 
-    console.print(f"\n[bold]{len(questions)} questions need your input:[/bold]\n")
+    # Auto-dismiss questions for short audio-only sessions — ambient mic captures
+    # (background conversations, media playing nearby) that slipped through before
+    # the intent.py suppression logic was added. Same rule: audio-only + conf < 0.5
+    # + duration < 10 min.
+    all_sessions = store.load_sessions(date.today())
+    session_map = {s.id: s for s in all_sessions}
 
+    auto_skipped = 0
+    actionable = []
     for q in questions:
+        s = session_map.get(q.session_id)
+        if s is not None:
+            is_audio_only = all(e.app_name in ("", "audio") for e in s.events)
+            if is_audio_only and s.confidence < 0.5 and s.total_duration_minutes < 10:
+                store.answer_question(q.session_id, "ambient audio — auto-skipped")
+                auto_skipped += 1
+                continue
+        actionable.append(q)
+
+    if auto_skipped:
+        console.print(
+            f"[dim]Auto-skipped {auto_skipped} short audio-only session(s) "
+            f"(ambient captures, not actionable).[/dim]\n"
+        )
+
+    if not actionable:
+        console.print("[green]No actionable questions remaining.[/green]")
+        return
+
+    console.print(f"\n[bold]{len(actionable)} questions need your input:[/bold]\n")
+
+    for q in actionable:
         console.print(Panel(
             f"[bold]{q.question}[/bold]\n\n"
             f"Context: {q.context}\n\n"
@@ -269,13 +298,14 @@ def validate() -> None:
     # Update sessions with validated labels
     sessions = store.load_sessions(date.today())
     for session in sessions:
-        for q in questions:
+        for q in actionable:
             if q.session_id == session.id and q.answered:
                 session.user_validated = True
                 session.user_label = q.answer
     store.save_sessions(sessions)
 
-    console.print(f"[green]All {len(questions)} questions answered.[/green]")
+    total_answered = len(actionable) + auto_skipped
+    console.print(f"[green]Done. {len(actionable)} answered, {auto_skipped} auto-skipped.[/green]")
 
 
 # ── REPORT ────────────────────────────────────────────────────

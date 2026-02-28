@@ -111,15 +111,27 @@ async def infer_intent(
 
         question = None
         if result.get("question") and session.confidence < 0.7:
-            q_data = result["question"]
-            question = ClassificationQuestion(
-                session_id=session.id,
-                question=q_data["text"],
-                options=q_data["options"],
-                context=f"Session at {session.start_time.strftime('%H:%M')}, "
-                f"{session.total_duration_minutes}min, "
-                f"apps: {', '.join(session.apps_used[:3])}",
+            # Don't prompt for short audio-only sessions — these are ambient mic
+            # captures (background conversations, media playing nearby), not
+            # actionable workflow data. Asking about them wastes validation budget.
+            is_audio_only = all(
+                e.app_name in ("", "audio") for e in session.events
             )
+            is_ambient = (
+                is_audio_only
+                and session.confidence < 0.5
+                and session.total_duration_minutes < 10
+            )
+            if not is_ambient:
+                q_data = result["question"]
+                question = ClassificationQuestion(
+                    session_id=session.id,
+                    question=q_data["text"],
+                    options=q_data["options"],
+                    context=f"Session at {session.start_time.strftime('%H:%M')}, "
+                    f"{session.total_duration_minutes}min, "
+                    f"apps: {', '.join(session.apps_used[:3])}",
+                )
 
         logger.info(
             "intent_inferred",
