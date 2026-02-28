@@ -467,6 +467,17 @@ async function refreshData() {
 }
 
 refreshData();
+
+// SSE live-reload: when workflowx serve --watch detects new session data,
+// auto-refresh without requiring the Update button click.
+(function() {
+  var es = new EventSource('/events');
+  es.onmessage = function(e) { if (e.data === 'reload') refreshData(); };
+  es.onerror = function() {
+    // Reconnect after 5 s — server may have restarted
+    setTimeout(function() { es = new EventSource('/events'); }, 5000);
+  };
+})();
 </script>
 </body>
 </html>"""

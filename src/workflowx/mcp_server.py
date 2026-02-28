@@ -597,6 +597,64 @@ def handle_get_roi() -> dict[str, Any]:
     return compute_roi_summary(outcomes)
 
 
+def handle_screenshot_dashboard(
+    url: str = "http://localhost:7788",
+    full_page: bool = True,
+) -> dict[str, Any]:
+    """Screenshot the WorkflowX dashboard using a headless browser.
+
+    Returns the screenshot file path — view it without leaving Claude.
+    Requires Playwright: pip install playwright && playwright install chromium
+
+    Args:
+        url: Dashboard URL to screenshot (default: http://localhost:7788).
+             Make sure `workflowx serve` is running first.
+        full_page: Capture full scrollable page, not just the viewport (default: True).
+
+    Typical loop:
+        1. workflowx serve  (in a separate terminal)
+        2. ask Claude to edit the dashboard HTML
+        3. call workflowx_screenshot — see the result inline without switching to Chrome
+        4. iterate
+    """
+    import tempfile
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return {
+            "status": "error",
+            "message": (
+                "Playwright not installed. "
+                "Run: pip install playwright && playwright install chromium"
+            ),
+        }
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1440, "height": 900})
+            page.goto(url, wait_until="networkidle", timeout=15000)
+            tmp = tempfile.mktemp(suffix=".png", prefix="workflowx_screenshot_")
+            page.screenshot(path=tmp, full_page=full_page)
+            browser.close()
+
+        return {
+            "status": "ok",
+            "screenshot_path": tmp,
+            "url": url,
+            "message": f"Screenshot saved to {tmp} — open this file to view the dashboard.",
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": (
+                f"Screenshot failed: {e}. "
+                "Is the dashboard server running? Start it with: workflowx serve"
+            ),
+        }
+
+
 def handle_diagnose_workflow(session_index: int = 0, period: str = "today") -> dict[str, Any]:
     """Deep-dive diagnosis of a specific workflow session.
 
@@ -686,6 +744,10 @@ TOOL_REGISTRY = {
         "handler": handle_diagnose_workflow,
         "description": "Deep-dive friction diagnosis of a specific session",
     },
+    "workflowx_screenshot": {
+        "handler": handle_screenshot_dashboard,
+        "description": "Screenshot the live dashboard — see it without switching to Chrome",
+    },
     # ── REPLACE ──
     "workflowx_propose": {
         "handler": handle_propose,
@@ -708,7 +770,7 @@ TOOL_REGISTRY = {
 
 
 def create_mcp_server():
-    """Create and configure the MCP server with all 12 tools.
+    """Create and configure the MCP server with all 13 tools.
 
     Uses FastMCP for tool registration. Each tool maps to a handler
     in the observe→understand→replace→measure loop.
@@ -761,6 +823,15 @@ def create_mcp_server():
         def workflowx_diagnose(session_index: int = 0, period: str = "today") -> str:
             """Deep-dive friction diagnosis of a specific session."""
             return json.dumps(handle_diagnose_workflow(session_index, period), default=str)
+
+        @mcp.tool()
+        def workflowx_screenshot(url: str = "http://localhost:7788", full_page: bool = True) -> str:
+            """Screenshot the live dashboard — see it without switching to Chrome.
+
+            Returns a file path to the PNG screenshot. Requires `workflowx serve` running.
+            Use this to review dashboard edits without leaving the Claude interface.
+            """
+            return json.dumps(handle_screenshot_dashboard(url, full_page), default=str)
 
         # ── REPLACE ──
 

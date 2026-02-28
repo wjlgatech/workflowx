@@ -664,27 +664,45 @@ def dashboard(output: str) -> None:
 
 
 @cli.command()
-@click.option("--port", default=7788, help="Port to serve dashboard on (default: 7788)")
-def serve(port: int) -> None:
-    """Start a live dashboard server at http://localhost:PORT.
+@click.option("--port", default=7788, help="Port to serve on (default: 7788)")
+@click.option("--file", "-f", "file_path", default=None, type=click.Path(exists=True),
+              help="Serve a specific HTML file instead of the live WorkflowX dashboard")
+@click.option("--watch", "-w", is_flag=True, default=False,
+              help="Auto-reload browser when data or file changes (requires watchdog)")
+def serve(port: int, file_path: str | None, watch: bool) -> None:
+    """Start a live server at http://localhost:PORT.
 
-    Unlike 'workflowx dashboard' which bakes data into a static file,
-    this serves a live page that fetches fresh data whenever you click
-    the Update button — no file regeneration needed.
+    Default mode: serves the WorkflowX live dashboard. Fetches fresh data
+    on the Update button click. With --watch, auto-refreshes whenever the
+    daemon writes new session or pattern data — no button click needed.
+
+    File mode (--file): serves any HTML file with hot-reload. Use this
+    while iterating on a dashboard HTML in your editor — the browser
+    updates on every save without switching windows to refresh manually.
+
+        workflowx serve --file workflowx-demo-dashboard.html --watch
 
     Press Ctrl+C to stop.
     """
+    from pathlib import Path
+
     from workflowx.config import load_config
-    from workflowx.server import run_server
+    from workflowx.server import run_file_server, run_server
     from workflowx.storage import LocalStore
 
-    config = load_config()
-    store = LocalStore(config.data_dir)
-
     url = f"http://localhost:{port}"
-    console.print(f"\n[bold]WorkflowX Live Dashboard[/bold]")
+    console.print(f"\n[bold]WorkflowX Server[/bold]")
     console.print(f"  URL:   [link={url}]{url}[/link]")
-    console.print(f"  Data:  {config.data_dir}")
+
+    if file_path:
+        p = Path(file_path)
+        console.print(f"  File:  {p.resolve()}")
+        console.print(f"  Watch: {'[green]on[/green] (auto-reload on save)' if watch else 'off'}")
+    else:
+        config = load_config()
+        console.print(f"  Data:  {config.data_dir}")
+        console.print(f"  Watch: {'[green]on[/green] (auto-refresh on new data)' if watch else 'off (Update button)'}")
+
     console.print(f"  Press [bold]Ctrl+C[/bold] to stop\n")
 
     try:
@@ -694,9 +712,14 @@ def serve(port: int) -> None:
         pass
 
     try:
-        run_server(config, store, port=port)
+        if file_path:
+            run_file_server(Path(file_path), port=port, watch=watch)
+        else:
+            config = load_config()
+            store = LocalStore(config.data_dir)
+            run_server(config, store, port=port, watch=watch)
     except KeyboardInterrupt:
-        console.print("\n[dim]Dashboard server stopped.[/dim]")
+        console.print("\n[dim]Server stopped.[/dim]")
     except OSError as e:
         if "Address already in use" in str(e):
             console.print(
@@ -705,6 +728,57 @@ def serve(port: int) -> None:
             )
         else:
             raise
+
+
+# ── SCAFFOLD ──────────────────────────────────────────────────
+
+
+@cli.command()
+@click.option(
+    "--output", "-o",
+    type=click.Path(),
+    default="workflowx-dashboard.html",
+    help="Output file path (default: workflowx-dashboard.html)",
+)
+def scaffold(output: str) -> None:
+    """Generate a clean, data-wired, editable HTML dashboard.
+
+    Unlike 'workflowx dashboard' (read-only static snapshot), the scaffold
+    is designed to be edited — by you or Claude — without rebuilding the
+    whole file from scratch. All WorkflowX data is embedded as a plain JS
+    object (WX_DATA) that Claude can read and reference by name.
+
+    Typical workflow:
+
+    \b
+        workflowx scaffold --output my-dashboard.html
+        workflowx serve --file my-dashboard.html --watch
+        # Ask Claude to edit my-dashboard.html
+        # Browser auto-reloads on every save — no manual refresh
+
+    Regenerate data at any time (keeps your HTML edits):
+
+    \b
+        workflowx scaffold --output my-dashboard.html
+    """
+    from workflowx.config import load_config
+    from workflowx.scaffold import generate_scaffold_html
+    from workflowx.storage import LocalStore
+
+    config = load_config()
+    store = LocalStore(config.data_dir)
+
+    from pathlib import Path
+
+    out = Path(output)
+    html = generate_scaffold_html(config, store, hourly_rate=config.hourly_rate_usd)
+    out.write_text(html)
+
+    console.print(f"\n[bold]Scaffold generated:[/bold] {out.resolve()}")
+    console.print(f"  Sessions embedded: [green]✓[/green]  Patterns: [green]✓[/green]  Trends: [green]✓[/green]")
+    console.print(f"\nNext steps:")
+    console.print(f"  [dim]workflowx serve --file {output} --watch[/dim]  ← live-reload preview")
+    console.print(f"  [dim]# Ask Claude to edit {output} — browser updates on every save[/dim]\n")
 
 
 # ── DEMO ──────────────────────────────────────────────────────
