@@ -153,6 +153,17 @@ class FrictionTrend(BaseModel):
 # ── Phase 3: Replacement Outcomes & ROI ──────────────────────
 
 
+class RejectionReason(str, Enum):
+    """Why a proposal was rejected."""
+
+    TOO_COMPLEX = "too_complex"
+    WRONG_TOOLS = "wrong_tools"
+    INACCURATE_SAVINGS = "inaccurate_savings"
+    ALREADY_TRIED = "already_tried"
+    NOT_RELEVANT = "not_relevant"
+    OTHER = "other"
+
+
 class ReplacementOutcome(BaseModel):
     """Tracks whether a replacement proposal was adopted and its actual ROI.
 
@@ -171,3 +182,5 @@ class ReplacementOutcome(BaseModel):
     weeks_tracked: int = 0
     notes: str = ""
     status: str = "pending"  # "pending", "adopted", "rejected", "measuring"
+    rejection_reason: RejectionReason | None = None
+    rejection_notes: str | None = None

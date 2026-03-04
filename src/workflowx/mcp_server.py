@@ -706,6 +706,57 @@ def handle_diagnose_workflow(session_index: int = 0, period: str = "today") -> d
     }
 
 
+def handle_reject(intent: str, reason: str, notes: str = "") -> dict[str, Any]:
+    """Reject a proposal with a reason and optional notes.
+
+    Args:
+        intent: The workflow intent to reject.
+        reason: Rejection reason (too_complex, wrong_tools, inaccurate_savings, already_tried, not_relevant, other).
+        notes: Optional notes explaining the rejection.
+
+    Records the rejection in the outcomes store and updates any matching outcomes.
+    """
+    from workflowx.memory import ProposalHistory
+    from workflowx.models import RejectionReason
+
+    store, _ = _get_store()
+    outcomes = store.load_outcomes()
+
+    # Find matching outcome by intent similarity
+    history = ProposalHistory(outcomes)
+    similar = history.find_similar(intent, top_k=1)
+
+    if not similar:
+        return {
+            "status": "no_match",
+            "message": f"No matching proposal found for intent: {intent}",
+            "similar_intents": [o.intent for o in outcomes[-5:]],
+        }
+
+    outcome = similar[0]
+
+    # Update rejection info
+    outcome.status = "rejected"
+    try:
+        outcome.rejection_reason = RejectionReason(reason)
+    except ValueError:
+        outcome.rejection_reason = RejectionReason.OTHER
+        logger.warning(f"Invalid rejection reason: {reason}, using OTHER")
+
+    outcome.rejection_notes = notes
+
+    # Save back to store
+    store.save_outcome(outcome)
+
+    return {
+        "status": "ok",
+        "message": f"Proposal for '{outcome.intent}' rejected",
+        "outcome_id": outcome.id,
+        "rejection_reason": reason,
+        "rejection_notes": notes,
+    }
+
+
 # ── MCP Server Setup ─────────────────────────────────────────
 
 
@@ -756,6 +807,10 @@ TOOL_REGISTRY = {
     "workflowx_adopt": {
         "handler": handle_adopt,
         "description": "Adopt a replacement and start tracking ROI (before/after measurement)",
+    },
+    "workflowx_reject": {
+        "handler": handle_reject,
+        "description": "Reject a proposal with a reason",
     },
     # ── MEASURE ──
     "workflowx_measure": {
@@ -844,6 +899,11 @@ def create_mcp_server():
         def workflowx_adopt(intent: str, before_minutes: float) -> str:
             """Adopt a replacement and start tracking ROI."""
             return json.dumps(handle_adopt(intent, before_minutes), default=str)
+
+        @mcp.tool()
+        def workflowx_reject(intent: str, reason: str, notes: str = "") -> str:
+            """Reject a proposal with a reason. Provide the intent and a reason."""
+            return json.dumps(handle_reject(intent, reason, notes), default=str)
 
         # ── MEASURE ──
 

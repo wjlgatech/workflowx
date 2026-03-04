@@ -177,10 +177,10 @@ WorkflowX sees that trail of events and says:
 The full flywheel — nobody else closes it:
 
 ```
-SCREENPIPE           WORKFLOWX                                              AGENTICOM
-  capture  ──→  infer intent ──→ diagnose friction ──→ validate ──→ propose ──→ execute
-     ↑                                                                            │
-     └──────────────────────── measure ROI ← freed time creates new data ────────┘
+SCREENPIPE           WORKFLOWX                                                        AGENTICOM
+  capture  ──→  infer intent ──→ diagnose friction ──→ guardrails ──→ propose ──→ execute
+     ↑                                                  (4 gates)                      │
+     └──────────────────────── measure ROI ← freed time creates new data ─────────────┘
 ```
 
 Activity trackers stop at capture. Process mining stops at diagnosis. RPA copies the old workflow. The flywheel reimagines the workflow from the goal backward — then proves it worked.
@@ -272,7 +272,7 @@ workflowx mcp
 
 ### Option C — Agentic via Claude/Cursor (MCP)
 
-WorkflowX exposes 12 MCP tools across the full flywheel. Add it to Claude Desktop or Cursor and talk to your workflow data:
+WorkflowX exposes 14 MCP tools across the full flywheel. Add it to Claude Desktop or Cursor and talk to your workflow data:
 
 ```
 "Show me my highest-friction sessions this week"
@@ -320,7 +320,7 @@ src/workflowx/
 ├── server.py              # Live dashboard HTTP server — GET / and GET /api/data
 ├── daemon.py              # Background scheduler: all pipeline stages, smart cadences
 ├── notifications.py       # macOS native notifications via osascript
-├── mcp_server.py          # 12 MCP tools — the agentic interface to the flywheel
+├── mcp_server.py          # 14 MCP tools — the agentic interface to the flywheel
 ├── capture/               # SCREENPIPE layer — don't rebuild capture, use it
 │   ├── screenpipe.py      # Reads Screenpipe's SQLite DB directly
 │   └── activitywatch.py   # Reads ActivityWatch REST API
@@ -330,8 +330,22 @@ src/workflowx/
 │   ├── reporter.py        # Daily/weekly report generation
 │   └── patterns.py        # Cross-day pattern detection + friction trends
 ├── replacement/           # AGENTICOM integration layer
-│   └── engine.py          # LLM-powered proposals + Agenticom YAML generation
-├── api/                   # FastAPI endpoints (Phase 4)
+│   └── engine.py          # LLM-powered proposals + 4-gate guardrail pipeline
+├── guardrails/            # TRUST LAYER — blocks garbage before it reaches users
+│   ├── mechanism_validator.py  # Rejects vague proposals ("leverage AI")
+│   ├── savings_validator.py    # Caps outlier savings estimates (3× observed max)
+│   ├── confidence_gate.py      # Suppresses proposals below confidence floor
+│   └── yaml_validator.py       # Pydantic schema validation for Agenticom YAML
+├── eval/                  # EVAL SYSTEM — proves the flywheel turns with numbers
+│   ├── datasets/          # 20 gold-annotated sessions for CI gating
+│   ├── graders/           # IntentGrader (F1), FrictionGrader, ROIGrader (MAPE)
+│   └── runner.py          # EvalRunner with CI gate thresholds
+├── memory/                # PROPOSAL MEMORY — stops the rejected-proposal loop
+│   └── proposal_history.py  # Local similarity search + rejection tracking
+├── reasoning/             # MODEL ROUTING — right model for right task
+│   ├── model_selector.py  # DecisionType → Haiku/Sonnet/Opus routing
+│   └── cost_logger.py     # Per-call cost tracking with session summaries
+├── api/                   # FastAPI endpoints (future)
 └── cli/                   # Click CLI — 16 commands
     └── main.py
 ```
@@ -367,10 +381,22 @@ Friction is computed as `context_switches / max(duration_minutes, 0.1)`. Thresho
 ### 6. Agenticom YAML Generation
 Replacement proposals aren't just text. Each proposal includes a machine-readable Agenticom workflow YAML that can be executed directly — no manual translation from "here's what to do" to "here's how to automate it."
 
-### 7. 12-Tool MCP Server
-`workflowx mcp` starts an MCP server exposing 12 tools organized across the full flywheel: observe (`status`, `capture`, `analyze`, `sessions`), understand (`friction`, `patterns`, `trends`, `diagnose`), replace (`propose`, `adopt`), measure (`measure`, `roi`). Claude or Cursor becomes your dashboard — no custom UI needed.
+### 7. 14-Tool MCP Server
+`workflowx mcp` starts an MCP server exposing 14 tools organized across the full flywheel: observe (`status`, `capture`, `analyze`, `sessions`), understand (`friction`, `patterns`, `trends`, `diagnose`, `screenshot`), replace (`propose`, `adopt`, `reject`), measure (`measure`, `roi`). Claude or Cursor becomes your dashboard — no custom UI needed.
 
-### 8. Background Daemon with Smart Cadences
+### 8. 4-Gate Guardrail Pipeline
+Every replacement proposal passes through four validation gates before reaching the user. The confidence gate suppresses low-confidence proposals (< 0.55). The mechanism validator blocks vague hand-waving ("leverage AI to streamline") and requires at least one named tool. The savings validator caps outlier estimates at 3× observed session duration. The YAML validator enforces Pydantic schemas on Agenticom output — agents must exist, steps must reference valid agent IDs. Garbage proposals used to reach users unchecked. Now they don't.
+
+### 9. Eval System with CI Gates
+`workflowx eval` runs three graders against a gold dataset of 20 annotated sessions: IntentGrader (soft F1 with 0.60 similarity threshold), FrictionGrader (exact + adjacent accuracy), and ROIGrader (MAPE on estimate vs. actual savings). CI blocks merges if intent F1 < 0.80. Prompt changes that silently degrade quality now fail loudly before they ship.
+
+### 10. Proposal Memory + Stuck Intent Detection
+Users reject a proposal. A week later, the same proposal appears. That loop kills trust. Proposal memory stores rejection reasons (enum + free-text notes) and runs local similarity search before generating new proposals. Three rejections on the same intent triggers "stuck intent" detection — which escalates to a stronger model and builds a context string from rejection history, so the next proposal addresses why the previous ones failed.
+
+### 11. Anthropic-Native Model Routing
+Not every LLM call needs the same model. Intent inference (fast, high-volume) routes to Haiku. Replacement proposals (nuanced, medium-stakes) route to Sonnet. Stuck intents and complex reasoning route to Opus. Per-call cost tracking logs model, tokens, cost, and decision type — so you can see exactly where your API budget goes. Configurable via `WORKFLOWX_MODEL_OVERRIDE` env var.
+
+### 12. Background Daemon with Smart Cadences
 `workflowx daemon start` installs a macOS launchd agent that runs the full pipeline automatically — invisible until it needs you.
 
 ```
@@ -426,7 +452,19 @@ The propose step is event-driven, not time-driven: it only fires when a new HIGH
 - [x] CLI: `adopt`, `measure`, `dashboard`, `serve`, `daemon start/stop/status`, `mcp`
 - [x] 134 tests, CI pipeline
 
-### Phase 4: Team Intelligence (v0.4)
+### Phase 4: Trust Layer (v0.4) — *Complete*
+
+- [x] 4-gate guardrail pipeline (confidence, mechanism, savings, YAML validation)
+- [x] Eval system with gold dataset (20 annotated sessions) + 3 graders + CI gates
+- [x] Agenticom YAML validator (Pydantic schema enforcement)
+- [x] Proposal memory with rejection tracking + stuck intent detection
+- [x] Anthropic-native model routing (Haiku/Sonnet/Opus by decision type)
+- [x] Per-call cost tracking with session summaries
+- [x] `workflowx_reject` MCP tool — 14 tools total
+- [x] 225 tests, CI pipeline
+- [x] [PRD: Tech Stack Upgrade](docs/PRD_tech_stack_upgrade.md) | [Deep Dive](docs/openai_tech_stack_deep_dive_workflowx.md)
+
+### Phase 5: Team Intelligence (v0.5)
 
 - [ ] Multi-user workflow graph
 - [ ] Team bottleneck detection
@@ -441,6 +479,7 @@ The propose step is event-driven, not time-driven: it only fires when a new HIGH
 - [ ] Real-time friction alerts
 - [ ] Self-improving inference (learn from user corrections)
 - [ ] Agenticom deep integration (execute proposals directly from WorkflowX)
+- [ ] Shadow mode: proposals run silently alongside manual work, accuracy measured before going live
 
 ---
 
@@ -463,8 +502,12 @@ WorkflowX will always be:
 | Intent inference | **Yes** | No | No | No | No |
 | User validation loop | **Yes** | No | No | No | No |
 | Workflow replacement | **Yes** | No | No | No | No |
+| Guardrails on proposals | **Yes** | N/A | N/A | No | N/A |
+| Eval system + CI gates | **Yes** | No | No | Partial | No |
+| Proposal memory | **Yes** | N/A | N/A | No | N/A |
+| Model routing (cost-aware) | **Yes** | No | No | No | No |
 | Agenticom integration | **Yes** | No | No | No | No |
-| MCP server (12 tools) | **Yes** | No | Partial | No | No |
+| MCP server (14 tools) | **Yes** | No | Partial | No | No |
 | ROI measurement | **Yes** | No | No | Partial | Partial |
 | Closed-loop flywheel | **Yes** | No | No | No | No |
 | Open source | **MIT** | No | **MIT** | No | No |
@@ -485,7 +528,7 @@ git clone https://github.com/wjlgatech/workflowx.git
 cd workflowx
 python3 -m venv .venv && source .venv/bin/activate
 make install-dev
-make test   # 134 tests — all green before you PR
+make test   # 225 tests — all green before you PR
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.

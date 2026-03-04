@@ -8,13 +8,21 @@ Then we generate an Agenticom workflow YAML if applicable.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import structlog
 
 from workflowx.models import ReplacementProposal, WorkflowDiagnosis, WorkflowSession
+from workflowx.guardrails import (
+    MechanismValidator,
+    SavingsEstimateValidator,
+    AgenticomYAMLValidator,
+    apply_confidence_floor,
+)
 
 logger = structlog.get_logger()
+log = logging.getLogger(__name__)
 
 REPLACEMENT_SYSTEM_PROMPT = """You are a workflow architect. Given a diagnosed workflow
 (what the user was doing, how long it took, where friction occurred), propose a
@@ -45,8 +53,14 @@ async def propose_replacement(
     session: WorkflowSession,
     llm_client: Any,
     model: str = "claude-sonnet-4-6",
-) -> ReplacementProposal:
-    """Generate a replacement proposal for a diagnosed workflow."""
+) -> ReplacementProposal | None:
+    """Generate a replacement proposal for a diagnosed workflow.
+
+    Applies guardrails to ensure proposals are specific, realistic, and high-quality.
+
+    Returns:
+        ReplacementProposal if valid, None if suppressed by guardrails.
+    """
 
     context = _build_diagnosis_context(diagnosis, session)
 
@@ -101,6 +115,53 @@ async def propose_replacement(
             requires_new_tools=result.get("requires_new_tools", []),
         )
 
+        # Apply guardrails
+        # 1. Confidence floor
+        passed, reason = apply_confidence_floor(proposal, floor=0.55)
+        if not passed:
+            logger.info(
+                "replacement_suppressed_confidence",
+                session_id=diagnosis.session_id,
+                reason=reason,
+                confidence=proposal.confidence,
+            )
+            return None
+
+        # 2. Mechanism validator
+        passed, reason = MechanismValidator.validate(proposal)
+        if not passed:
+            logger.info(
+                "replacement_suppressed_mechanism",
+                session_id=diagnosis.session_id,
+                reason=reason,
+            )
+            return None
+
+        # 3. Savings validator
+        passed, reason = SavingsEstimateValidator.validate(proposal, session)
+        if not passed:
+            # Downgrade confidence and prepend [SPECULATIVE]
+            log.warning(f"Savings estimate violated bounds: {reason}")
+            proposal.confidence = 0.40
+            proposal.proposed_workflow = f"[SPECULATIVE] {proposal.proposed_workflow}"
+            logger.info(
+                "replacement_downgraded_savings",
+                session_id=diagnosis.session_id,
+                reason=reason,
+                new_confidence=proposal.confidence,
+            )
+
+        # 4. YAML validator (non-fatal)
+        if proposal.agenticom_workflow_yaml:
+            passed, reason = AgenticomYAMLValidator.validate(proposal.agenticom_workflow_yaml)
+            if not passed:
+                log.warning(f"Agenticom YAML validation warning: {reason}")
+                logger.info(
+                    "replacement_yaml_warning",
+                    session_id=diagnosis.session_id,
+                    reason=reason,
+                )
+
         logger.info(
             "replacement_proposed",
             session_id=diagnosis.session_id,
@@ -111,12 +172,7 @@ async def propose_replacement(
 
     except Exception as e:
         logger.error("replacement_generation_failed", error=str(e))
-        return ReplacementProposal(
-            diagnosis_id=diagnosis.session_id,
-            original_workflow=diagnosis.intent,
-            proposed_workflow="(generation failed)",
-            mechanism=f"Error: {e}",
-        )
+        return None
 
 
 def _build_diagnosis_context(diagnosis: WorkflowDiagnosis, session: WorkflowSession) -> str:

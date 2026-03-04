@@ -51,8 +51,8 @@ SAMPLE_SESSIONS = [
 
 # ── Registry ────────────────────────────────────────────────
 
-def test_tool_registry_has_13_tools():
-    assert len(TOOL_REGISTRY) == 13
+def test_tool_registry_has_14_tools():
+    assert len(TOOL_REGISTRY) == 14
 
 
 def test_all_tools_have_handlers():
