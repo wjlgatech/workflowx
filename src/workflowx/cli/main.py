@@ -372,8 +372,8 @@ def propose(top: int) -> None:
         console.print("[yellow]No sessions. Run 'workflowx capture' + 'workflowx analyze' first.[/yellow]")
         return
 
-    # Find highest-friction sessions
-    analyzed = [s for s in sessions if s.inferred_intent]
+    # Find highest-friction sessions — exclude inference_failed (no valid intent to propose for)
+    analyzed = [s for s in sessions if s.inferred_intent and s.inferred_intent != "inference_failed"]
     if not analyzed:
         console.print("[yellow]Sessions not yet analyzed. Run 'workflowx analyze' first.[/yellow]")
         return
