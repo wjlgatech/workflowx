@@ -46,6 +46,10 @@ replacement = [
     "pyyaml>=6.0",           # Generate Agenticom workflow YAML
     "httpx>=0.27",           # Call Agenticom API
 ]
+social = [
+    "tweepy>=4.14",          # Post to X/Twitter via API v2
+    "playwright>=1.40",      # Post to LinkedIn via browser automation
+]
 api = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
@@ -54,7 +58,7 @@ mcp = [
     "mcp>=1.0",               # MCP server for Claude/Cursor integration
 ]
 all = [
-    "workflowx[capture,inference,replacement,api,mcp]",
+    "workflowx[capture,inference,replacement,social,api,mcp]",
 ]
 dev = [
     "pytest>=8.0",

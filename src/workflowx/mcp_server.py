@@ -989,6 +989,54 @@ def handle_sidebar_check(
     }
 
 
+# ── Social Media Automation ─────────────────────────────────────
+
+
+def handle_post_social(
+    platform: str,
+    text: str,
+    url: str = "",
+    schedule_for: str = "",
+) -> dict[str, Any]:
+    """Post to social media immediately or schedule for later.
+
+    Args:
+        platform: "linkedin", "twitter", or "both"
+        text: Post text.
+        url: Optional URL to attach.
+        schedule_for: ISO 8601 datetime string (e.g., "2026-04-10T14:30:00").
+                     Empty string = post immediately.
+
+    Returns:
+        Result dict from social.mcp_tools.handle_post_social
+    """
+    from workflowx.social.mcp_tools import handle_post_social as _h
+
+    return _h(platform, text, url, schedule_for)
+
+
+def handle_list_post_queue() -> dict[str, Any]:
+    """List all pending posts in the queue.
+
+    Returns:
+        Result dict from social.mcp_tools.handle_list_post_queue
+    """
+    from workflowx.social.mcp_tools import handle_list_post_queue as _h
+
+    return _h()
+
+
+def handle_process_post_queue() -> dict[str, Any]:
+    """Process all due posts in the queue.
+
+    Returns:
+        Result dict from social.mcp_tools.handle_process_post_queue
+    """
+    from workflowx.social.mcp_tools import handle_process_post_queue as _h
+
+    return _h()
+
+
 # ── MCP Server Setup ─────────────────────────────────────────
 
 
@@ -1081,6 +1129,22 @@ TOOL_REGISTRY = {
             "Check if real-time meeting sidebar can activate. "
             "Internal meetings only — returns consent status and instructions."
         ),
+    },
+    # ── SOCIAL MEDIA AUTOMATION ──
+    "workflowx_post_social": {
+        "handler": handle_post_social,
+        "description": (
+            "Post to LinkedIn, X/Twitter, or both immediately or on schedule. "
+            "Cost: ~$0.01/tweet via X API v2. Cookies expire ~1 year on LinkedIn."
+        ),
+    },
+    "workflowx_list_post_queue": {
+        "handler": handle_list_post_queue,
+        "description": "List all pending posts in the queue waiting to be posted",
+    },
+    "workflowx_process_post_queue": {
+        "handler": handle_process_post_queue,
+        "description": "Process and post all due items in the queue",
     },
 }
 
@@ -1253,6 +1317,40 @@ def create_mcp_server():
                 handle_sidebar_check(attendee_emails, meeting_description),
                 default=str,
             )
+
+        # ── SOCIAL MEDIA AUTOMATION ──
+
+        @mcp.tool()
+        def workflowx_post_social(
+            platform: str,
+            text: str,
+            url: str = "",
+            schedule_for: str = "",
+        ) -> str:
+            """Post to LinkedIn, X/Twitter, or both immediately or on schedule.
+
+            Cost: ~$0.01/tweet via X API v2. LinkedIn cookies expire ~1 year.
+
+            Args:
+                platform: "linkedin", "twitter", or "both"
+                text: Post text.
+                url: Optional URL to attach.
+                schedule_for: ISO 8601 datetime for scheduling (empty = post now).
+            """
+            return json.dumps(
+                handle_post_social(platform, text, url, schedule_for),
+                default=str,
+            )
+
+        @mcp.tool()
+        def workflowx_list_post_queue() -> str:
+            """List all pending posts in the queue waiting to be posted."""
+            return json.dumps(handle_list_post_queue(), default=str)
+
+        @mcp.tool()
+        def workflowx_process_post_queue() -> str:
+            """Process and post all due items in the queue."""
+            return json.dumps(handle_process_post_queue(), default=str)
 
         return mcp
 
