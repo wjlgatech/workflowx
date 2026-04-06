@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "workflowx": {
+      "command": "python",
+      "args": ["-m", "workflowx.mcp_server"],
+      "env": {
+        "WORKFLOWX_DATA_DIR": "~/.workflowx",
+        "WORKFLOWX_HOURLY_RATE": "75"
+      }
+    }
+  }
+}
