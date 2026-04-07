@@ -1037,6 +1037,79 @@ def handle_process_post_queue() -> dict[str, Any]:
     return _h()
 
 
+# ── MS Graph Auth & API ───────────────────────────────────────
+
+
+def handle_ms_auth_start() -> dict[str, Any]:
+    """Start Microsoft 365 device code auth flow.
+
+    Returns the verification URL and user code DIRECTLY in the response —
+    no log file hunting, no stderr. The code appears right here in chat.
+
+    Flow:
+      1. Call this tool → get user_code + verification_uri
+      2. Go to verification_uri in your browser
+      3. Enter the user_code shown
+      4. Call workflowx_ms_auth_complete to finish
+
+    Returns:
+        {
+          "status": "ok",
+          "user_code": "ABCD1234",
+          "verification_uri": "https://microsoft.com/devicelogin",
+          "expires_in": 900,
+          "message": "Go to https://microsoft.com/devicelogin and enter ABCD1234"
+        }
+    """
+    from workflowx.ms_graph.auth import MSGraphAuth
+
+    auth = MSGraphAuth()
+    return auth.start_device_flow()
+
+
+def handle_ms_auth_complete(timeout: int = 300) -> dict[str, Any]:
+    """Complete Microsoft 365 auth after you've entered the device code in the browser.
+
+    Call this after visiting the URL and entering the code from workflowx_ms_auth_start.
+    Polls every 5 seconds until authenticated or timed out.
+
+    Args:
+        timeout: Seconds to wait for completion (default: 300 = 5 min).
+
+    Returns:
+        {"status": "ok", "account": "user@domain.com", "message": "Authenticated as ..."}
+        {"status": "error", "message": "..."}
+    """
+    from workflowx.ms_graph.auth import MSGraphAuth
+
+    auth = MSGraphAuth()
+    return auth.complete_device_flow(timeout=timeout)
+
+
+def handle_ms_auth_check() -> dict[str, Any]:
+    """Check Microsoft 365 authentication status without triggering a new login.
+
+    Returns:
+        {"status": "ok", "authenticated": true, "account": "user@domain.com"}
+        {"status": "ok", "authenticated": false, "message": "Call workflowx_ms_auth_start"}
+    """
+    from workflowx.ms_graph.auth import MSGraphAuth
+
+    auth = MSGraphAuth()
+    token_result = auth.get_token()
+    if token_result["status"] == "ok":
+        return {
+            "status": "ok",
+            "authenticated": True,
+            "account": token_result.get("account", "unknown"),
+        }
+    return {
+        "status": "ok",
+        "authenticated": False,
+        "message": "Not authenticated. Call workflowx_ms_auth_start to begin.",
+    }
+
+
 # ── MCP Server Setup ─────────────────────────────────────────
 
 
@@ -1145,6 +1218,26 @@ TOOL_REGISTRY = {
     "workflowx_process_post_queue": {
         "handler": handle_process_post_queue,
         "description": "Process and post all due items in the queue",
+    },
+    # ── MICROSOFT 365 (Outlook + Teams) ──
+    "workflowx_ms_auth_start": {
+        "handler": handle_ms_auth_start,
+        "description": (
+            "Start Microsoft 365 login. Returns the device code and URL directly in the "
+            "response — no log files needed. Go to the URL, enter the code, then call "
+            "workflowx_ms_auth_complete."
+        ),
+    },
+    "workflowx_ms_auth_complete": {
+        "handler": handle_ms_auth_complete,
+        "description": (
+            "Complete Microsoft 365 login after entering the device code in the browser. "
+            "Polls until authenticated. Call after workflowx_ms_auth_start."
+        ),
+    },
+    "workflowx_ms_auth_check": {
+        "handler": handle_ms_auth_check,
+        "description": "Check if Microsoft 365 is authenticated (Outlook + Teams access).",
     },
 }
 
@@ -1351,6 +1444,33 @@ def create_mcp_server():
         def workflowx_process_post_queue() -> str:
             """Process and post all due items in the queue."""
             return json.dumps(handle_process_post_queue(), default=str)
+
+        # ── MICROSOFT 365 (Outlook + Teams) ──
+
+        @mcp.tool()
+        def workflowx_ms_auth_start() -> str:
+            """Start Microsoft 365 login. Returns device code and URL directly in response.
+
+            Go to the verification_uri in your browser, enter the user_code shown,
+            then call workflowx_ms_auth_complete. No log file hunting required.
+            """
+            return json.dumps(handle_ms_auth_start(), default=str)
+
+        @mcp.tool()
+        def workflowx_ms_auth_complete(timeout: int = 300) -> str:
+            """Complete Microsoft 365 login after entering the device code in the browser.
+
+            Polls until authenticated or timed out. Call after workflowx_ms_auth_start.
+
+            Args:
+                timeout: Seconds to wait (default 300 = 5 min).
+            """
+            return json.dumps(handle_ms_auth_complete(timeout), default=str)
+
+        @mcp.tool()
+        def workflowx_ms_auth_check() -> str:
+            """Check if Microsoft 365 is already authenticated (Outlook + Teams access)."""
+            return json.dumps(handle_ms_auth_check(), default=str)
 
         return mcp
 

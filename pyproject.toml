@@ -50,6 +50,10 @@ social = [
     "tweepy>=4.14",          # Post to X/Twitter via API v2
     "playwright>=1.40",      # Post to LinkedIn via browser automation
 ]
+ms365 = [
+    "msal>=1.28",            # Microsoft Authentication Library — device code flow
+    "requests>=2.31",        # MS Graph REST calls
+]
 api = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
@@ -58,7 +62,7 @@ mcp = [
     "mcp>=1.0",               # MCP server for Claude/Cursor integration
 ]
 all = [
-    "workflowx[capture,inference,replacement,social,api,mcp]",
+    "workflowx[capture,inference,replacement,social,ms365,api,mcp]",
 ]
 dev = [
     "pytest>=8.0",
